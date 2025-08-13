@@ -101,3 +101,142 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "تطوير منصة رقمية (Marketplace) متخصصة في سوق مواد البناء بالسعودية كوسيط بين العميل والمورد. التطبيق يجب أن يكون متكامل بكل الميزات مرة واحدة ليكون أفضل تطبيق في الشرق الأوسط من حيث الميزات وسهولة التعامل والواجهة. يشمل واجهات منفصلة للعملاء والموردين، متاجر للموردين، تصنيفات شاملة لمواد البناء، نظام دفع، خرائط، محادثة، وكل الميزات المتقدمة."
+
+backend:
+  - task: "نظام المستخدمين متعدد الأدوار (عملاء، موردين، إدارة)"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "نماذج قاعدة البيانات للمنتجات والتصنيفات والطلبات"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "APIs إدارة المتاجر والمنتجات للموردين"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "نظام البحث والفلترة المتقدم"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "نظام عربة التسوق والطلبات"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "نظام المحادثة المباشرة"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history: []
+
+  - task: "نظام التقييمات والمراجعات"
+    implemented: false
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history: []
+
+frontend:
+  - task: "واجهة المستخدم الرئيسية وتسجيل الدخول"
+    implemented: false
+    working: "NA"
+    file: "App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "لوحة تحكم العملاء مع البحث والتصفح"
+    implemented: false
+    working: "NA"
+    file: "components/"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "لوحة تحكم الموردين وإدارة المتاجر"
+    implemented: false
+    working: "NA"
+    file: "components/"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "نظام عربة التسوق وإنهاء الطلبات"
+    implemented: false
+    working: "NA"
+    file: "components/"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history: []
+
+  - task: "تكامل الخرائط لعرض مواقع الموردين"
+    implemented: false
+    working: "NA"
+    file: "components/"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history: []
+
+  - task: "واجهة المحادثة المباشرة"
+    implemented: false
+    working: "NA"
+    file: "components/"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history: []
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "تطوير Backend APIs الأساسية"
+    - "تطوير واجهات المستخدم"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "بدء تطوير منصة مواد البناء المتكاملة. سأطور كل الميزات المطلوبة مرة واحدة مع التركيز على جودة عالية وتصميم احترافي."
