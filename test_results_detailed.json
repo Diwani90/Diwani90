@@ -1,0 +1,176 @@
+[
+  {
+    "test": "Customer Registration",
+    "success": true,
+    "details": "Customer registered successfully",
+    "timestamp": "2025-08-13T01:32:13.294393",
+    "response_data": {
+      "id": "9f040bbb-ce53-4d19-b838-677f3f8b5454",
+      "email": "ahmed.customer@example.com",
+      "full_name": "أحمد محمد العتيبي",
+      "phone": "+966501234567",
+      "role": "customer",
+      "is_active": true,
+      "is_verified": false,
+      "created_at": "2025-08-13T01:32:13.258216",
+      "updated_at": "2025-08-13T01:32:13.258219",
+      "delivery_address": "حي الملك فهد، الرياض، المملكة العربية السعودية",
+      "city": "الرياض",
+      "company_name": null,
+      "commercial_registration": null,
+      "tax_number": null,
+      "business_description": null,
+      "categories": [],
+      "location": null,
+      "rating": 0.0,
+      "total_reviews": 0
+    }
+  },
+  {
+    "test": "Supplier Registration",
+    "success": true,
+    "details": "Supplier registered successfully",
+    "timestamp": "2025-08-13T01:32:13.572312",
+    "response_data": {
+      "id": "71afbccf-cad8-46cd-aac9-9d87a4e57286",
+      "email": "supplier.alwatan@example.com",
+      "full_name": "محمد عبدالله الشمري",
+      "phone": "+966502345678",
+      "role": "supplier",
+      "is_active": true,
+      "is_verified": false,
+      "created_at": "2025-08-13T01:32:13.565452",
+      "updated_at": "2025-08-13T01:32:13.565454",
+      "delivery_address": null,
+      "city": "الرياض",
+      "company_name": "شركة الوطن لمواد البناء",
+      "commercial_registration": "1010123456",
+      "tax_number": "300123456789003",
+      "business_description": "متخصصون في توريد جميع أنواع مواد البناء والتشييد بأعلى جودة وأفضل الأسعار",
+      "categories": [
+        "concrete",
+        "rebar",
+        "blocks",
+        "sand"
+      ],
+      "location": {
+        "lat": 24.7136,
+        "lng": 46.6753
+      },
+      "rating": 0.0,
+      "total_reviews": 0
+    }
+  },
+  {
+    "test": "Customer Login",
+    "success": true,
+    "details": "Customer login successful",
+    "timestamp": "2025-08-13T01:32:13.845582",
+    "response_data": null
+  },
+  {
+    "test": "Supplier Login",
+    "success": true,
+    "details": "Supplier login successful",
+    "timestamp": "2025-08-13T01:32:14.166279",
+    "response_data": null
+  },
+  {
+    "test": "Get Categories",
+    "success": true,
+    "details": "Retrieved 14 categories successfully",
+    "timestamp": "2025-08-13T01:32:14.184510",
+    "response_data": null
+  },
+  {
+    "test": "Create Product",
+    "success": true,
+    "details": "Product created successfully with ID: ba10ab69-64d0-43f1-adfe-017746fb635f",
+    "timestamp": "2025-08-13T01:32:14.219201",
+    "response_data": null
+  },
+  {
+    "test": "Search Products by Category",
+    "success": true,
+    "details": "Found 1 concrete products",
+    "timestamp": "2025-08-13T01:32:14.246201",
+    "response_data": null
+  },
+  {
+    "test": "Search Products by Text",
+    "success": true,
+    "details": "Found 1 products matching 'خرسانة'",
+    "timestamp": "2025-08-13T01:32:14.267012",
+    "response_data": null
+  },
+  {
+    "test": "Filter Products by Price",
+    "success": true,
+    "details": "Found 1 products in price range 100-500",
+    "timestamp": "2025-08-13T01:32:14.296357",
+    "response_data": null
+  },
+  {
+    "test": "Add to Cart",
+    "success": true,
+    "details": "Product added to cart successfully",
+    "timestamp": "2025-08-13T01:32:14.327691",
+    "response_data": null
+  },
+  {
+    "test": "Get Cart",
+    "success": true,
+    "details": "Retrieved cart with 1 items",
+    "timestamp": "2025-08-13T01:32:14.350639",
+    "response_data": null
+  },
+  {
+    "test": "Create Order",
+    "success": true,
+    "details": "Order created successfully with ID: 31bb4ee0-223e-4b93-b48a-14a4860311e6, Total: 2800.0 SAR",
+    "timestamp": "2025-08-13T01:32:14.394164",
+    "response_data": null
+  },
+  {
+    "test": "Update Order Status",
+    "success": true,
+    "details": "Order status updated to confirmed",
+    "timestamp": "2025-08-13T01:32:14.424000",
+    "response_data": null
+  },
+  {
+    "test": "Send Chat Message",
+    "success": true,
+    "details": "Message sent successfully, Conversation ID: 71afbccf-cad8-46cd-aac9-9d87a4e57286_9f040bbb-ce53-4d19-b838-677f3f8b5454",
+    "timestamp": "2025-08-13T01:32:14.454612",
+    "response_data": null
+  },
+  {
+    "test": "Get Conversations",
+    "success": true,
+    "details": "Retrieved 1 conversations",
+    "timestamp": "2025-08-13T01:32:14.473946",
+    "response_data": null
+  },
+  {
+    "test": "Create Review",
+    "success": true,
+    "details": "Review created successfully with rating: 5/5",
+    "timestamp": "2025-08-13T01:32:14.512205",
+    "response_data": null
+  },
+  {
+    "test": "Customer Dashboard Stats",
+    "success": true,
+    "details": "Stats: 1 orders, 0 pending, 0 cart items",
+    "timestamp": "2025-08-13T01:32:14.581218",
+    "response_data": null
+  },
+  {
+    "test": "Supplier Dashboard Stats",
+    "success": true,
+    "details": "Stats: 1 products, 1 orders, Revenue: 2800.0 SAR",
+    "timestamp": "2025-08-13T01:32:14.601212",
+    "response_data": null
+  }
+]
