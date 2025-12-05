@@ -19,6 +19,9 @@ from apps.accounts.api import router as accounts_router
 from apps.stores.api import router as stores_router
 from apps.products.api import router as products_router
 from apps.orders.api import router as orders_router
+from apps.payments.api import router as payments_router
+from apps.notifications.api import router as notifications_router
+from apps.delivery.api import router as delivery_router
 
 # ===================================
 # API Configuration
@@ -68,6 +71,9 @@ api.add_router('/accounts', accounts_router, tags=['المستخدمين وال�
 api.add_router('/stores', stores_router, tags=['المتاجر'])
 api.add_router('/products', products_router, tags=['المنتجات'])
 api.add_router('/orders', orders_router, tags=['السلة والطلبات'])
+api.add_router('/payments', payments_router, tags=['المدفوعات'])
+api.add_router('/notifications', notifications_router, tags=['الإشعارات'])
+api.add_router('/delivery', delivery_router, tags=['التوصيل'])
 
 # ===================================
 # URL Patterns
