@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
+import { authService } from './services/api';
 
 // Import components (we'll create these)
 import HomePage from './components/HomePage';
@@ -108,14 +109,27 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/auth/login', credentials);
+      // استخدام authService للتحقق من OTP
+      const response = await authService.verifyOTP(credentials.phone, credentials.otp);
       dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
       return { success: true };
     } catch (error) {
       dispatch({ type: 'SET_LOADING', payload: false });
-      return { 
-        success: false, 
-        error: error.response?.data?.detail || 'حدث خطأ في تسجيل الدخول' 
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'حدث خطأ في تسجيل الدخول'
+      };
+    }
+  };
+
+  const requestOTP = async (phone) => {
+    try {
+      const response = await authService.requestOTP(phone);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'حدث خطأ في إرسال رمز التحقق'
       };
     }
   };
@@ -123,14 +137,14 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/auth/register', userData);
+      const response = await authService.register(userData);
       dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
       return { success: true };
     } catch (error) {
       dispatch({ type: 'SET_LOADING', payload: false });
-      return { 
-        success: false, 
-        error: error.response?.data?.detail || 'حدث خطأ في التسجيل' 
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'حدث خطأ في التسجيل'
       };
     }
   };
@@ -144,7 +158,8 @@ export const AuthProvider = ({ children }) => {
       ...state,
       login,
       register,
-      logout
+      logout,
+      requestOTP
     }}>
       {children}
     </AuthContext.Provider>
@@ -239,11 +254,6 @@ function App() {
                       <ProductsPage />
                     </ProtectedRoute>
                   } />
-                  <Route path="/dashboard/products/new" element={
-                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
-                      <ProductsPage />
-                    </ProtectedRoute>
-                  } />
                   <Route path="/dashboard/products/:id" element={
                     <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
                       <ProductsPage />
@@ -300,12 +310,6 @@ function App() {
                     </ProtectedRoute>
                   } />
                   
-                  {/* Redirect based on user role */}
-                  <Route path="/dashboard" element={
-                    <ProtectedRoute>
-                      <DashboardRedirect />
-                    </ProtectedRoute>
-                  } />
                 </Routes>
               </main>
             </div>
@@ -315,18 +319,5 @@ function App() {
     </div>
   );
 }
-
-// Component to redirect to appropriate dashboard
-const DashboardRedirect = () => {
-  const { user } = useAuth();
-  
-  if (user.role === 'customer') {
-    return <Navigate to="/customer/dashboard" replace />;
-  } else if (user.role === 'supplier') {
-    return <Navigate to="/supplier/dashboard" replace />;
-  } else {
-    return <Navigate to="/" replace />;
-  }
-};
 
 export default App;

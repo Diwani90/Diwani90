@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../App';
 import { useToast } from '../ui/toast';
-import { EyeIcon, EyeSlashIcon, EnvelopeIcon, LockClosedIcon } from '@heroicons/react/24/outline';
+import { PhoneIcon, LockClosedIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 const LoginPage = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
-  const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState(1); // 1: phone, 2: otp
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [errors, setErrors] = useState({});
-  
-  const { login, loading, isAuthenticated } = useAuth();
+  const [countdown, setCountdown] = useState(0);
+  const [otpLoading, setOtpLoading] = useState(false);
+
+  const otpRefs = useRef([]);
+  const { login, requestOTP, loading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -20,61 +21,131 @@ const LoginPage = () => {
   const from = location.state?.from?.pathname || '/dashboard';
 
   // Redirect if already authenticated
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated) {
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, from]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+  // Countdown timer for resend OTP
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  const validatePhone = () => {
+    const phoneRegex = /^(\+966|0)?5[0-9]{8}$/;
+    const cleanPhone = phone.replace(/\s/g, '');
+
+    if (!cleanPhone) {
+      setErrors({ phone: 'رقم الجوال مطلوب' });
+      return false;
+    }
+    if (!phoneRegex.test(cleanPhone)) {
+      setErrors({ phone: 'رقم الجوال غير صحيح' });
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
+
+  const handleSendOTP = async () => {
+    if (!validatePhone()) return;
+
+    setOtpLoading(true);
+    const result = await requestOTP(phone);
+    setOtpLoading(false);
+
+    if (result.success) {
+      toast.success('تم إرسال رمز التحقق', 'تحقق من رسائل هاتفك');
+      setStep(2);
+      setCountdown(60); // 60 seconds countdown
+      // Focus first OTP input
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    } else {
+      toast.error('خطأ', result.error);
     }
   };
 
-  const validateForm = () => {
-    const newErrors = {};
+  const handleOtpChange = (index, value) => {
+    // Only allow numbers
+    if (value && !/^\d$/.test(value)) return;
 
-    if (!formData.email) {
-      newErrors.email = 'البريد الإلكتروني مطلوب';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'البريد الإلكتروني غير صحيح';
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpRefs.current[index + 1]?.focus();
     }
-
-    if (!formData.password) {
-      newErrors.password = 'كلمة المرور مطلوبة';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
+    const pastedData = e.clipboardData.getData('text').slice(0, 6);
+    if (/^\d+$/.test(pastedData)) {
+      const newOtp = [...otp];
+      for (let i = 0; i < pastedData.length; i++) {
+        newOtp[i] = pastedData[i];
+      }
+      setOtp(newOtp);
+      // Focus the next empty input or the last one
+      const nextIndex = Math.min(pastedData.length, 5);
+      otpRefs.current[nextIndex]?.focus();
+    }
+  };
+
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+
+    const otpCode = otp.join('');
+    if (otpCode.length !== 6) {
+      setErrors({ otp: 'أدخل رمز التحقق كاملاً' });
       return;
     }
 
-    const result = await login(formData);
-    
+    const result = await login({ phone, otp: otpCode });
+
     if (result.success) {
-      toast.success('تم تسجيل الدخول بنجاح', 'مرحباً بك في منصة مواد البناء');
+      toast.success('تم تسجيل الدخول بنجاح', 'مرحباً بك في منصة ديواني');
       navigate(from, { replace: true });
     } else {
       toast.error('خطأ في تسجيل الدخول', result.error);
+      setOtp(['', '', '', '', '', '']);
+      otpRefs.current[0]?.focus();
     }
+  };
+
+  const handleResendOTP = async () => {
+    if (countdown > 0) return;
+
+    setOtpLoading(true);
+    const result = await requestOTP(phone);
+    setOtpLoading(false);
+
+    if (result.success) {
+      toast.success('تم إعادة إرسال رمز التحقق', 'تحقق من رسائل هاتفك');
+      setCountdown(60);
+      setOtp(['', '', '', '', '', '']);
+      otpRefs.current[0]?.focus();
+    } else {
+      toast.error('خطأ', result.error);
+    }
+  };
+
+  const handleBackToPhone = () => {
+    setStep(1);
+    setOtp(['', '', '', '', '', '']);
+    setErrors({});
   };
 
   return (
@@ -85,126 +156,147 @@ const LoginPage = () => {
             <LockClosedIcon className="h-8 w-8 text-white" />
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">تسجيل الدخول</h2>
-          <p className="text-gray-600">ادخل إلى حسابك في منصة مواد البناء</p>
+          <p className="text-gray-600">
+            {step === 1
+              ? 'أدخل رقم جوالك للمتابعة'
+              : `أدخل رمز التحقق المرسل إلى ${phone}`
+            }
+          </p>
         </div>
 
         <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                البريد الإلكتروني
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <EnvelopeIcon className="h-5 w-5 text-gray-400" />
+          {step === 1 ? (
+            // Step 1: Phone Number
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                  رقم الجوال
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <PhoneIcon className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      if (errors.phone) setErrors({});
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendOTP()}
+                    className={`input-field pr-10 text-left direction-ltr ${errors.phone ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
+                    placeholder="05xxxxxxxx"
+                    dir="ltr"
+                  />
                 </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className={`input-field pr-10 ${errors.email ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
-                  placeholder="أدخل بريدك الإلكتروني"
-                />
+                {errors.phone && (
+                  <p className="mt-2 text-sm text-red-600">{errors.phone}</p>
+                )}
               </div>
-              {errors.email && (
-                <p className="mt-2 text-sm text-red-600">{errors.email}</p>
-              )}
-            </div>
 
-            {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                كلمة المرور
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <LockClosedIcon className="h-5 w-5 text-gray-400" />
+              <button
+                type="button"
+                onClick={handleSendOTP}
+                disabled={otpLoading}
+                className="w-full btn-primary flex items-center justify-center"
+              >
+                {otpLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white ml-2"></div>
+                    جاري الإرسال...
+                  </div>
+                ) : (
+                  'إرسال رمز التحقق'
+                )}
+              </button>
+            </div>
+          ) : (
+            // Step 2: OTP Verification
+            <form onSubmit={handleVerifyOTP} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-4 text-center">
+                  رمز التحقق
+                </label>
+                <div className="flex justify-center gap-2" dir="ltr">
+                  {otp.map((digit, index) => (
+                    <input
+                      key={index}
+                      ref={(el) => (otpRefs.current[index] = el)}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                      onPaste={handleOtpPaste}
+                      className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    />
+                  ))}
                 </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={`input-field pr-10 pl-10 ${errors.password ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
-                  placeholder="أدخل كلمة المرور"
-                />
+                {errors.otp && (
+                  <p className="mt-2 text-sm text-red-600 text-center">{errors.otp}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full btn-primary flex items-center justify-center"
+              >
+                {loading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white ml-2"></div>
+                    جاري التحقق...
+                  </div>
+                ) : (
+                  'تسجيل الدخول'
+                )}
+              </button>
+
+              <div className="flex items-center justify-between text-sm">
                 <button
                   type="button"
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={handleBackToPhone}
+                  className="text-gray-600 hover:text-gray-800"
                 >
-                  {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                  )}
+                  تغيير رقم الجوال
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendOTP}
+                  disabled={countdown > 0 || otpLoading}
+                  className={`flex items-center ${countdown > 0 ? 'text-gray-400' : 'text-blue-600 hover:text-blue-700'}`}
+                >
+                  <ArrowPathIcon className="h-4 w-4 ml-1" />
+                  {countdown > 0 ? `إعادة الإرسال (${countdown})` : 'إعادة إرسال الرمز'}
                 </button>
               </div>
-              {errors.password && (
-                <p className="mt-2 text-sm text-red-600">{errors.password}</p>
-              )}
-            </div>
+            </form>
+          )}
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="mr-2 text-sm text-gray-600">تذكرني</span>
-              </label>
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">أو</span>
+            </div>
+          </div>
+
+          {/* Register Link */}
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
+              ليس لديك حساب؟{' '}
               <Link
-                to="/forgot-password"
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                to="/register"
+                className="font-medium text-blue-600 hover:text-blue-700"
               >
-                نسيت كلمة المرور؟
+                إنشاء حساب جديد
               </Link>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full btn-primary flex items-center justify-center"
-            >
-              {loading ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white ml-2"></div>
-                  جاري تسجيل الدخول...
-                </div>
-              ) : (
-                'تسجيل الدخول'
-              )}
-            </button>
-
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">أو</span>
-              </div>
-            </div>
-
-            {/* Register Link */}
-            <div className="text-center">
-              <p className="text-sm text-gray-600">
-                ليس لديك حساب؟{' '}
-                <Link
-                  to="/register"
-                  className="font-medium text-blue-600 hover:text-blue-700"
-                >
-                  إنشاء حساب جديد
-                </Link>
-              </p>
-            </div>
-          </form>
+            </p>
+          </div>
         </div>
 
         {/* Additional Info */}

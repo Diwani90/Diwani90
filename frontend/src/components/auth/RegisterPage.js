@@ -54,8 +54,8 @@ const RegisterPage = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await axios.get('/categories');
-        setCategories(response.data.categories);
+        const response = await axios.get('/stores/categories');
+        setCategories(response.data || []);
       } catch (error) {
         console.error('Error fetching categories:', error);
       }
