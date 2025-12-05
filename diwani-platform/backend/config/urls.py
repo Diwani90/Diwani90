@@ -13,28 +13,61 @@ from ninja_jwt.controller import NinjaJWTDefaultController
 from ninja_extra import NinjaExtraAPI
 
 # ===================================
+# Import Routers
+# ===================================
+from apps.accounts.api import router as accounts_router
+from apps.stores.api import router as stores_router
+from apps.products.api import router as products_router
+from apps.orders.api import router as orders_router
+
+# ===================================
 # API Configuration
 # ===================================
 api = NinjaExtraAPI(
-    title='Diwani API',
+    title='Diwani API - منصة ديواني',
     version='1.0.0',
     description='''
-    🚀 منصة ديواني - API Documentation
+    # 🏗️ منصة ديواني لمواد البناء
 
-    منصة متكاملة للتجارة الإلكترونية والتوصيل
+    منصة سعودية متكاملة للتجارة الإلكترونية في مواد البناء
 
-    ## الميزات:
-    - 🛒 إدارة المتاجر والمنتجات
-    - 📦 نظام الطلبات
+    ## 📦 الميزات الرئيسية:
+    - 👤 المصادقة والمستخدمين (OTP، JWT)
+    - 🏪 إدارة المتاجر والموردين
+    - 📦 المنتجات والمخزون
+    - 🛒 سلة التسوق والطلبات
+    - 💳 بوابات الدفع (مدى، Apple Pay)
     - 🚚 التوصيل والتتبع اللحظي
-    - 💳 بوابات الدفع
-    - 🔔 الإشعارات
+    - ⭐ التقييمات والمراجعات
+    - 🔔 الإشعارات الفورية
+
+    ## 🔐 المصادقة:
+    استخدم JWT Bearer Token في header:
+    ```
+    Authorization: Bearer <your_token>
+    ```
+
+    ## 📍 التغطية الجغرافية:
+    - جميع المناطق السعودية
+    - الرياض، جدة، الدمام، مكة، المدينة...
+
+    ---
+    **الإصدار:** 1.0.0 | **التاريخ:** 2024
     ''',
     urls_namespace='api',
 )
 
-# Register JWT Controller
+# ===================================
+# Register Controllers & Routers
+# ===================================
+# JWT Authentication Controller
 api.register_controllers(NinjaJWTDefaultController)
+
+# Register API Routers
+api.add_router('/accounts', accounts_router, tags=['المستخدمين والمصادقة'])
+api.add_router('/stores', stores_router, tags=['المتاجر'])
+api.add_router('/products', products_router, tags=['المنتجات'])
+api.add_router('/orders', orders_router, tags=['السلة والطلبات'])
 
 # ===================================
 # URL Patterns
@@ -43,20 +76,11 @@ urlpatterns = [
     # Admin Panel
     path('admin/', admin.site.urls),
 
-    # API v1
-    path('api/', api.urls),
+    # API v1 - Main API with all routers
+    path('api/v1/', api.urls),
 
     # Health Check
     path('api/health/', include('apps.core.urls')),
-
-    # App-specific APIs
-    path('api/v1/accounts/', include('apps.accounts.urls')),
-    path('api/v1/stores/', include('apps.stores.urls')),
-    path('api/v1/products/', include('apps.products.urls')),
-    path('api/v1/orders/', include('apps.orders.urls')),
-    path('api/v1/delivery/', include('apps.delivery.urls')),
-    path('api/v1/payments/', include('apps.payments.urls')),
-    path('api/v1/notifications/', include('apps.notifications.urls')),
 ]
 
 # ===================================
