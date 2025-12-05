@@ -1,0 +1,193 @@
+# ===================================
+# منصة ديواني - Docker Compose
+# Diwani Platform - Development Environment
+# ===================================
+
+version: '3.9'
+
+services:
+  # =============================
+  # PostgreSQL Database + PostGIS
+  # =============================
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: diwani_db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      POSTGRES_DB: diwani_db
+      POSTGRES_USER: diwani_user
+      POSTGRES_PASSWORD: diwani_secure_pass_2025
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diwani_user -d diwani_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diwani_network
+
+  # =============================
+  # Redis (Cache & Celery Broker)
+  # =============================
+  redis:
+    image: redis:7.4-alpine
+    container_name: diwani_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diwani_network
+
+  # =============================
+  # Django Backend Application
+  # =============================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diwani_backend
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2"
+    volumes:
+      - ./backend:/app
+      - static_volume:/app/static
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=diwani-super-secret-key-change-in-production-2025
+      - DATABASE_URL=postgis://diwani_user:diwani_secure_pass_2025@db:5432/diwani_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - diwani_network
+
+  # =============================
+  # Celery Worker (Background Tasks)
+  # =============================
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diwani_celery_worker
+    restart: unless-stopped
+    command: celery -A config worker -l INFO --concurrency=4
+    volumes:
+      - ./backend:/app
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=diwani-super-secret-key-change-in-production-2025
+      - DATABASE_URL=postgis://diwani_user:diwani_secure_pass_2025@db:5432/diwani_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - diwani_network
+
+  # =============================
+  # Celery Beat (Scheduled Tasks)
+  # =============================
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diwani_celery_beat
+    restart: unless-stopped
+    command: celery -A config beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=diwani-super-secret-key-change-in-production-2025
+      - DATABASE_URL=postgis://diwani_user:diwani_secure_pass_2025@db:5432/diwani_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - diwani_network
+
+  # =============================
+  # Flower (Celery Monitoring)
+  # =============================
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diwani_flower
+    restart: unless-stopped
+    command: celery -A config flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=diwani-super-secret-key-change-in-production-2025
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - celery_worker
+    networks:
+      - diwani_network
+
+  # =============================
+  # Nginx (Reverse Proxy)
+  # =============================
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: diwani_nginx
+    restart: unless-stopped
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - static_volume:/app/static:ro
+      - media_volume:/app/media:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    networks:
+      - diwani_network
+
+# =============================
+# Volumes
+# =============================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local
+
+# =============================
+# Networks
+# =============================
+networks:
+  diwani_network:
+    driver: bridge
