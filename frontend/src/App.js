@@ -19,6 +19,10 @@ import SuppliersPage from './components/suppliers/SuppliersPage';
 import Navigation from './components/layout/Navigation';
 import { ToastProvider } from './components/ui/toast';
 
+// New Dashboard Components
+import { DashboardHome } from './components/dashboard';
+import { ProductsPage, OrdersPage as DashboardOrdersPage, SettingsPage } from './components/dashboard/pages';
+
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
@@ -211,6 +215,43 @@ function App() {
                   <Route path="/supplier/dashboard" element={
                     <ProtectedRoute allowedRoles={['supplier']}>
                       <SupplierDashboard />
+                    </ProtectedRoute>
+                  } />
+
+                  {/* New Professional Dashboard Routes */}
+                  <Route path="/dashboard" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <DashboardHome />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/products" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <ProductsPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/products/new" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <ProductsPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/products/:id" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <ProductsPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/orders" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <DashboardOrdersPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/orders/:id" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <DashboardOrdersPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/settings" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <SettingsPage />
                     </ProtectedRoute>
                   } />
                   
