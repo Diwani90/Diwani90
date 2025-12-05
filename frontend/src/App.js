@@ -21,7 +21,17 @@ import { ToastProvider } from './components/ui/toast';
 
 // New Dashboard Components
 import { DashboardHome } from './components/dashboard';
-import { ProductsPage, OrdersPage as DashboardOrdersPage, SettingsPage } from './components/dashboard/pages';
+import {
+  ProductsPage,
+  ProductForm,
+  OrdersPage as DashboardOrdersPage,
+  SettingsPage,
+  ReportsPage,
+  DeliveryPage
+} from './components/dashboard/pages';
+
+// Marketplace Components
+import MarketplaceHome from './components/marketplace/MarketplaceHome';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -254,7 +264,30 @@ function App() {
                       <SettingsPage />
                     </ProtectedRoute>
                   } />
-                  
+                  <Route path="/dashboard/products/new" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <ProductForm />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/products/:id/edit" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <ProductForm />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/reports" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <ReportsPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/delivery" element={
+                    <ProtectedRoute allowedRoles={['supplier', 'vendor']}>
+                      <DeliveryPage />
+                    </ProtectedRoute>
+                  } />
+
+                  {/* Marketplace Routes */}
+                  <Route path="/marketplace" element={<MarketplaceHome />} />
+
                   {/* Chat */}
                   <Route path="/chat" element={
                     <ProtectedRoute>
