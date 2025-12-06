@@ -69,6 +69,11 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # Middleware
 # ===================================
 MIDDLEWARE = [
+    # Security (First Layer)
+    'apps.core.security.SecurityHeadersMiddleware',
+    'apps.core.security.RateLimitMiddleware',
+    'apps.core.security.SecurityAuditMiddleware',
+    # Django Core
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -393,3 +398,88 @@ DIWANI_SETTINGS = {
         'SANDBOX': env.bool('TAMARA_SANDBOX', default=True),
     },
 }
+
+# ===================================
+# Advanced Security Settings
+# Saudi NCA / PDPL Compliance
+# ===================================
+
+# Django Security Settings
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# HTTPS Settings (Production)
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Session Security
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # 7 days
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# CSRF Security
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+])
+
+# Password Validation (Strong)
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 12},
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+# Password Hashing (Argon2)
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+]
+
+# Field-Level Encryption Key
+FIELD_ENCRYPTION_KEY = env('FIELD_ENCRYPTION_KEY', default=SECRET_KEY[:32])
+
+# Rate Limiting Settings
+RATELIMIT_ENABLE = True
+RATELIMIT_USE_CACHE = 'default'
+RATELIMIT_FAIL_OPEN = False
+
+# Security Audit Logging
+SECURITY_AUDIT_ENABLED = True
+SECURITY_LOG_FAILED_AUTH = True
+SECURITY_LOG_SENSITIVE_OPERATIONS = True
+
+# Data Retention (PDPL Compliance)
+DATA_RETENTION_DAYS = {
+    'otp': 1,
+    'session': 30,
+    'notification': 90,
+    'user_activity': 365 * 2,
+    'order': 365 * 5,
+    'transaction': 365 * 7,
+}
+
+# IP Geolocation (for Saudi-only features)
+ALLOWED_COUNTRIES = ['SA', 'AE', 'KW', 'BH', 'QA', 'OM']  # GCC countries

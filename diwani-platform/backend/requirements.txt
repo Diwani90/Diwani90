@@ -31,6 +31,17 @@ argon2-cffi==23.1.0
 django-otp==1.5.4
 phonenumbers==8.13.50
 
+# Advanced Security (Saudi Compliance - NCA/PDPL)
+django-csp==3.8                    # Content Security Policy headers
+django-ratelimit==4.1.0            # Rate limiting for API endpoints
+django-axes==6.5.1                 # Brute force protection
+django-cryptography==1.1           # Field-level encryption
+cryptography==43.0.3               # Cryptographic primitives
+bleach==6.2.0                      # XSS sanitization
+python-ipware==3.0.0               # Real IP detection behind proxies
+django-permissions-policy==4.21.0  # Permissions-Policy headers
+django-feature-policy==3.12.0      # Feature-Policy headers (deprecated but useful)
+
 # Async & Background Tasks
 celery==5.4.0
 django-celery-beat==2.7.0
