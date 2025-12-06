@@ -354,4 +354,42 @@ DIWANI_SETTINGS = {
     'MAX_IMAGE_SIZE_MB': 5,
     'MAX_DOCUMENT_SIZE_MB': 10,
     'ALLOWED_IMAGE_TYPES': ['image/jpeg', 'image/png', 'image/webp'],
+
+    # SMS Provider (Unifonic)
+    'UNIFONIC': {
+        'APP_SID': env('UNIFONIC_APP_SID', default=''),
+        'SENDER_ID': env('UNIFONIC_SENDER_ID', default='DIWANI'),
+    },
+
+    # Push Notifications (Firebase)
+    'FIREBASE': {
+        'SERVER_KEY': env('FIREBASE_SERVER_KEY', default=''),
+        'PROJECT_ID': env('FIREBASE_PROJECT_ID', default=''),
+    },
+
+    # Payment Gateways
+    'MOYASAR': {
+        'API_KEY': env('MOYASAR_API_KEY', default=''),
+        'SECRET_KEY': env('MOYASAR_SECRET_KEY', default=''),
+        'PUBLISHABLE_KEY': env('MOYASAR_PUBLISHABLE_KEY', default=''),
+        'SANDBOX': env.bool('MOYASAR_SANDBOX', default=True),
+    },
+
+    'TAP': {
+        'SECRET_KEY': env('TAP_SECRET_KEY', default=''),
+        'PUBLISHABLE_KEY': env('TAP_PUBLISHABLE_KEY', default=''),
+        'SANDBOX': env.bool('TAP_SANDBOX', default=True),
+    },
+
+    'TABBY': {
+        'API_KEY': env('TABBY_API_KEY', default=''),
+        'MERCHANT_CODE': env('TABBY_MERCHANT_CODE', default=''),
+        'SANDBOX': env.bool('TABBY_SANDBOX', default=True),
+    },
+
+    'TAMARA': {
+        'API_TOKEN': env('TAMARA_API_TOKEN', default=''),
+        'MERCHANT_ID': env('TAMARA_MERCHANT_ID', default=''),
+        'SANDBOX': env.bool('TAMARA_SANDBOX', default=True),
+    },
 }

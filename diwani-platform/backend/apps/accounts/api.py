@@ -17,6 +17,7 @@ from django.conf import settings
 from ninja import Router, File
 from ninja.files import UploadedFile
 from ninja_jwt.tokens import RefreshToken
+from ninja_jwt.authentication import JWTAuth
 
 from .models import User, OTP, Address, WalletTransaction, DriverProfile, VendorProfile
 from .schemas import (
@@ -60,9 +61,9 @@ def request_otp(request, data: RequestOTPSchema):
         # Generate OTP
         otp = OTP.generate(data.phone_number, purpose=OTP.Purpose.LOGIN)
 
-        # TODO: Send SMS via Unifonic/Msegat
-        # For development, we'll log the OTP
-        print(f"[DEV] OTP for {data.phone_number}: {otp.code}")
+        # Send OTP via SMS (Celery task)
+        from apps.notifications.tasks import send_otp_sms
+        send_otp_sms.delay(data.phone_number, otp.code)
 
         return 200, MessageSchema(
             message='تم إرسال رمز التحقق بنجاح',
@@ -192,17 +193,19 @@ def refresh_token(request, data: RefreshTokenSchema):
 # ===================================
 # User Profile Endpoints
 # ===================================
-@router.get('/me', response=UserOutSchema, auth=None)  # Will add auth later
+@router.get('/me', response={200: UserOutSchema, 401: ErrorSchema}, auth=JWTAuth())
 def get_current_user(request):
     """
     الحصول على بيانات المستخدم الحالي
+    ---
+    يتطلب JWT Token صالح
     """
-    # TODO: Add proper authentication
-    user = request.user if request.user.is_authenticated else User.objects.first()
-    return user
+    if not request.user.is_authenticated:
+        return 401, ErrorSchema(message='غير مصرح - يرجى تسجيل الدخول')
+    return 200, request.user
 
 
-@router.patch('/me', response={200: UserOutSchema, 400: ErrorSchema})
+@router.patch('/me', response={200: UserOutSchema, 400: ErrorSchema}, auth=JWTAuth())
 def update_profile(request, data: UserUpdateSchema):
     """
     تحديث بيانات المستخدم
@@ -220,7 +223,7 @@ def update_profile(request, data: UserUpdateSchema):
         return 400, ErrorSchema(message=str(e))
 
 
-@router.post('/me/avatar', response={200: UserOutSchema, 400: ErrorSchema})
+@router.post('/me/avatar', response={200: UserOutSchema, 400: ErrorSchema}, auth=JWTAuth())
 def upload_avatar(request, file: UploadedFile = File(...)):
     """
     رفع الصورة الشخصية
@@ -246,7 +249,7 @@ def upload_avatar(request, file: UploadedFile = File(...)):
         return 400, ErrorSchema(message=str(e))
 
 
-@router.post('/me/fcm-token', response=MessageSchema)
+@router.post('/me/fcm-token', response=MessageSchema, auth=JWTAuth())
 def update_fcm_token(request, data: UpdateFCMTokenSchema):
     """
     تحديث رمز FCM للإشعارات
@@ -260,7 +263,7 @@ def update_fcm_token(request, data: UpdateFCMTokenSchema):
 # ===================================
 # Address Endpoints
 # ===================================
-@router.get('/me/addresses', response=List[AddressOutSchema])
+@router.get('/me/addresses', response=List[AddressOutSchema], auth=JWTAuth())
 def list_addresses(request):
     """
     قائمة عناوين المستخدم
@@ -268,7 +271,7 @@ def list_addresses(request):
     return request.user.addresses.all()
 
 
-@router.post('/me/addresses', response={201: AddressOutSchema, 400: ErrorSchema})
+@router.post('/me/addresses', response={201: AddressOutSchema, 400: ErrorSchema}, auth=JWTAuth())
 def create_address(request, data: AddressCreateSchema):
     """
     إضافة عنوان جديد
@@ -286,7 +289,7 @@ def create_address(request, data: AddressCreateSchema):
         return 400, ErrorSchema(message=str(e))
 
 
-@router.get('/me/addresses/{address_id}', response={200: AddressOutSchema, 404: ErrorSchema})
+@router.get('/me/addresses/{address_id}', response={200: AddressOutSchema, 404: ErrorSchema}, auth=JWTAuth())
 def get_address(request, address_id: UUID):
     """
     الحصول على تفاصيل عنوان
@@ -298,7 +301,7 @@ def get_address(request, address_id: UUID):
         return 404, ErrorSchema(message='العنوان غير موجود')
 
 
-@router.patch('/me/addresses/{address_id}', response={200: AddressOutSchema, 400: ErrorSchema})
+@router.patch('/me/addresses/{address_id}', response={200: AddressOutSchema, 400: ErrorSchema}, auth=JWTAuth())
 def update_address(request, address_id: UUID, data: AddressUpdateSchema):
     """
     تحديث عنوان
@@ -322,7 +325,7 @@ def update_address(request, address_id: UUID, data: AddressUpdateSchema):
         return 400, ErrorSchema(message=str(e))
 
 
-@router.delete('/me/addresses/{address_id}', response={200: MessageSchema, 404: ErrorSchema})
+@router.delete('/me/addresses/{address_id}', response={200: MessageSchema, 404: ErrorSchema}, auth=JWTAuth())
 def delete_address(request, address_id: UUID):
     """
     حذف عنوان
@@ -338,7 +341,7 @@ def delete_address(request, address_id: UUID):
 # ===================================
 # Wallet Endpoints
 # ===================================
-@router.get('/me/wallet', response=WalletBalanceSchema)
+@router.get('/me/wallet', response=WalletBalanceSchema, auth=JWTAuth())
 def get_wallet_balance(request):
     """
     رصيد المحفظة
@@ -346,7 +349,7 @@ def get_wallet_balance(request):
     return WalletBalanceSchema(balance=request.user.wallet_balance)
 
 
-@router.get('/me/wallet/transactions', response=List[WalletTransactionOutSchema])
+@router.get('/me/wallet/transactions', response=List[WalletTransactionOutSchema], auth=JWTAuth())
 def list_wallet_transactions(request, limit: int = 20, offset: int = 0):
     """
     سجل عمليات المحفظة
@@ -360,7 +363,7 @@ def list_wallet_transactions(request, limit: int = 20, offset: int = 0):
 # ===================================
 # Driver Endpoints
 # ===================================
-@router.post('/me/become-driver', response={201: DriverProfileOutSchema, 400: ErrorSchema})
+@router.post('/me/become-driver', response={201: DriverProfileOutSchema, 400: ErrorSchema}, auth=JWTAuth())
 def become_driver(
     request,
     data: DriverRegisterSchema,
@@ -391,7 +394,7 @@ def become_driver(
         return 400, ErrorSchema(message=str(e))
 
 
-@router.get('/me/driver-profile', response={200: DriverProfileOutSchema, 404: ErrorSchema})
+@router.get('/me/driver-profile', response={200: DriverProfileOutSchema, 404: ErrorSchema}, auth=JWTAuth())
 def get_driver_profile(request):
     """
     الحصول على ملف السائق
@@ -403,7 +406,7 @@ def get_driver_profile(request):
         return 404, ErrorSchema(message='لم يتم العثور على ملف السائق')
 
 
-@router.post('/me/driver/location', response=MessageSchema)
+@router.post('/me/driver/location', response=MessageSchema, auth=JWTAuth())
 def update_driver_location(request, data: DriverLocationUpdateSchema):
     """
     تحديث موقع السائق
@@ -416,7 +419,7 @@ def update_driver_location(request, data: DriverLocationUpdateSchema):
         return MessageSchema(message='لم يتم العثور على ملف السائق', success=False)
 
 
-@router.post('/me/driver/online', response=MessageSchema)
+@router.post('/me/driver/online', response=MessageSchema, auth=JWTAuth())
 def go_online(request):
     """
     تفعيل حالة الاتصال للسائق
@@ -429,7 +432,7 @@ def go_online(request):
         return MessageSchema(message='لم يتم العثور على ملف السائق', success=False)
 
 
-@router.post('/me/driver/offline', response=MessageSchema)
+@router.post('/me/driver/offline', response=MessageSchema, auth=JWTAuth())
 def go_offline(request):
     """
     إيقاف حالة الاتصال للسائق
@@ -445,7 +448,7 @@ def go_offline(request):
 # ===================================
 # Vendor Endpoints
 # ===================================
-@router.post('/me/become-vendor', response={201: VendorProfileOutSchema, 400: ErrorSchema})
+@router.post('/me/become-vendor', response={201: VendorProfileOutSchema, 400: ErrorSchema}, auth=JWTAuth())
 def become_vendor(
     request,
     data: VendorRegisterSchema,
@@ -474,7 +477,7 @@ def become_vendor(
         return 400, ErrorSchema(message=str(e))
 
 
-@router.get('/me/vendor-profile', response={200: VendorProfileOutSchema, 404: ErrorSchema})
+@router.get('/me/vendor-profile', response={200: VendorProfileOutSchema, 404: ErrorSchema}, auth=JWTAuth())
 def get_vendor_profile(request):
     """
     الحصول على ملف التاجر
