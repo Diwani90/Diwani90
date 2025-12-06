@@ -26,40 +26,34 @@ app.autodiscover_tasks()
 # ===================================
 app.conf.beat_schedule = {
     # Clean expired OTP codes every hour
-    'clean-expired-otp': {
-        'task': 'apps.accounts.tasks.clean_expired_otp',
+    'cleanup-expired-otps': {
+        'task': 'apps.notifications.tasks.cleanup_expired_otps',
         'schedule': crontab(minute=0),  # Every hour
     },
 
-    # Update store ratings daily
-    'update-store-ratings': {
-        'task': 'apps.stores.tasks.update_store_ratings',
-        'schedule': crontab(hour=3, minute=0),  # 3 AM
-    },
-
-    # Send order reminders
-    'send-order-reminders': {
-        'task': 'apps.orders.tasks.send_pending_order_reminders',
-        'schedule': crontab(minute='*/15'),  # Every 15 minutes
-    },
-
-    # Clean old notifications
-    'clean-old-notifications': {
-        'task': 'apps.notifications.tasks.clean_old_notifications',
+    # Clean old notifications daily
+    'cleanup-old-notifications': {
+        'task': 'apps.notifications.tasks.cleanup_old_notifications',
         'schedule': crontab(hour=4, minute=0),  # 4 AM
     },
 
-    # Generate daily reports
-    'generate-daily-report': {
-        'task': 'apps.core.tasks.generate_daily_report',
-        'schedule': crontab(hour=6, minute=0),  # 6 AM
-    },
-
-    # Check driver locations (for inactive drivers)
-    'check-driver-activity': {
-        'task': 'apps.delivery.tasks.check_driver_activity',
-        'schedule': crontab(minute='*/5'),  # Every 5 minutes
-    },
+    # TODO: Add these tasks when implementing respective apps
+    # 'update-store-ratings': {
+    #     'task': 'apps.stores.tasks.update_store_ratings',
+    #     'schedule': crontab(hour=3, minute=0),  # 3 AM
+    # },
+    # 'send-order-reminders': {
+    #     'task': 'apps.orders.tasks.send_pending_order_reminders',
+    #     'schedule': crontab(minute='*/15'),  # Every 15 minutes
+    # },
+    # 'generate-daily-report': {
+    #     'task': 'apps.core.tasks.generate_daily_report',
+    #     'schedule': crontab(hour=6, minute=0),  # 6 AM
+    # },
+    # 'check-driver-activity': {
+    #     'task': 'apps.delivery.tasks.check_driver_activity',
+    #     'schedule': crontab(minute='*/5'),  # Every 5 minutes
+    # },
 }
 
 # ===================================

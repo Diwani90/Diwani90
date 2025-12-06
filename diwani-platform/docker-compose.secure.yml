@@ -261,6 +261,7 @@ services:
       - /tmp:size=64M
     volumes:
       - ./docker/nginx.secure.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/proxy_params:/etc/nginx/proxy_params:ro
       - ./docker/ssl:/etc/nginx/ssl:ro
       - static_volume:/app/static:ro
       - media_volume:/app/media:ro
