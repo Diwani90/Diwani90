@@ -66,6 +66,7 @@ LOCAL_APPS = [
     'apps.realtime.apps.RealtimeConfig',  # Real-time & WebSockets
     'apps.chat.apps.ChatConfig',  # المحادثات
     'apps.tracking.apps.TrackingConfig',  # التتبع الحي
+    'apps.finance.apps.FinanceConfig',  # النظام المالي
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -576,3 +577,59 @@ DATA_RETENTION_DAYS = {
 
 # IP Geolocation (for Saudi-only features)
 ALLOWED_COUNTRIES = ['SA', 'AE', 'KW', 'BH', 'QA', 'OM']  # GCC countries
+
+# ===================================
+# Finance & Payments Configuration
+# تكامل Tap Connect وبرامج المحاسبة
+# ===================================
+
+# Tax Rate (Saudi VAT)
+TAX_RATE = 0.15  # 15%
+
+# Tap Connect (Marketplace Payments)
+TAP_ENVIRONMENT = env('TAP_ENVIRONMENT', default='sandbox')
+TAP_SECRET_KEY = env('TAP_SECRET_KEY', default='')
+TAP_PUBLIC_KEY = env('TAP_PUBLIC_KEY', default='')
+TAP_WEBHOOK_SECRET = env('TAP_WEBHOOK_SECRET', default='')
+
+# Accounting Integration (Qoyod/Dafater)
+ACCOUNTING_PROVIDER = env('ACCOUNTING_PROVIDER', default='qoyod')
+
+# Qoyod
+QOYOD_API_KEY = env('QOYOD_API_KEY', default='')
+QOYOD_ORGANIZATION_ID = env('QOYOD_ORGANIZATION_ID', default='')
+
+# Dafater (Alternative)
+DAFATER_API_KEY = env('DAFATER_API_KEY', default='')
+
+# Finance Team Notifications
+FINANCE_TEAM_EMAILS = env.list('FINANCE_TEAM_EMAILS', default=[])
+
+# Commission Settings
+FINANCE_SETTINGS = {
+    # Default Commission Rates
+    'DEFAULT_VENDOR_COMMISSION': 0.05,  # 5%
+    'DEFAULT_DRIVER_COMMISSION': 0.15,  # 15%
+
+    # Volume Discounts
+    'VOLUME_DISCOUNT_TIERS': [
+        (50000, 0.04),   # 4% for orders >= 50,000 SAR
+        (100000, 0.03),  # 3% for orders >= 100,000 SAR
+    ],
+
+    # Payout Settings
+    'MIN_PAYOUT_AMOUNT': 100,  # Minimum withdrawal
+    'PAYOUT_HOLD_DAYS': 3,     # Days before funds are available
+
+    # Reconciliation
+    'RECONCILIATION_TIME': '02:00',  # Run at 2 AM daily
+    'RECONCILIATION_TOLERANCE': 0.01,  # 1 halala tolerance
+
+    # Invoice Settings
+    'INVOICE_PREFIX': 'INV',
+    'AUTO_SYNC_TO_ACCOUNTING': True,
+
+    # Ledger
+    'VERIFY_LEDGER_INTEGRITY': True,
+    'LEDGER_RETENTION_YEARS': 7,  # ZATCA requirement
+}
