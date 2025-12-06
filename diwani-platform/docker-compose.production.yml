@@ -1,9 +1,24 @@
 # ===================================
 # منصة ديواني - Docker Compose Production
 # Diwani Platform - Production Environment
+# Saudi NCA/PDPL Compliance Ready
 # ===================================
 
 version: '3.9'
+
+# Security defaults for all services
+x-security-opts: &security-opts
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   # =============================
@@ -13,6 +28,7 @@ services:
     image: postgis/postgis:16-3.4
     container_name: diwani_db_prod
     restart: always
+    <<: [*security-opts, *default-logging]
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -46,6 +62,8 @@ services:
     image: redis:7.4-alpine
     container_name: diwani_redis_prod
     restart: always
+    <<: [*security-opts, *default-logging]
+    read_only: true
     command: >
       redis-server
       --appendonly yes
@@ -80,6 +98,8 @@ services:
         - VERSION=${VERSION:-1.0.0}
     container_name: diwani_backend_prod
     restart: always
+    <<: [*security-opts, *default-logging]
+    user: "1000:1000"
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
@@ -155,6 +175,8 @@ services:
       dockerfile: Dockerfile.production
     container_name: diwani_celery_worker_prod
     restart: always
+    <<: [*security-opts, *default-logging]
+    user: "1000:1000"
     command: >
       celery -A config worker
       -l INFO
@@ -193,6 +215,8 @@ services:
       dockerfile: Dockerfile.production
     container_name: diwani_celery_beat_prod
     restart: always
+    <<: [*security-opts, *default-logging]
+    user: "1000:1000"
     command: >
       celery -A config beat
       -l INFO
@@ -224,6 +248,12 @@ services:
     image: nginx:1.27-alpine
     container_name: diwani_nginx_prod
     restart: always
+    <<: [*security-opts, *default-logging]
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=128M
+      - /var/run:size=16M
+      - /tmp:size=64M
     volumes:
       - ./docker/nginx.production.conf:/etc/nginx/nginx.conf:ro
       - ./docker/ssl:/etc/nginx/ssl:ro

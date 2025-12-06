@@ -1,6 +1,7 @@
 # ===================================
 # منصة ديواني - Production Dockerfile
 # Multi-stage build for security & size
+# Saudi NCA/PDPL Compliance Ready
 # ===================================
 
 # Stage 1: Build dependencies
@@ -25,7 +26,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir gunicorn[gevent] sentry-sdk django-prometheus
+    && pip install --no-cache-dir gunicorn[gevent] sentry-sdk
 
 
 # Stage 2: Production image
@@ -35,16 +36,18 @@ FROM python:3.12-slim as production
 ARG BUILD_DATE
 ARG VERSION=1.0.0
 
-# Labels
+# Security & Metadata Labels
 LABEL maintainer="Diwani Platform <dev@diwani.sa>" \
       version="${VERSION}" \
       build-date="${BUILD_DATE}" \
-      description="Diwani Platform - Saudi Building Materials Marketplace"
+      description="Diwani Platform - Saudi Building Materials Marketplace" \
+      security.compliance="NCA-ECC,PDPL"
 
 # Environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONHASHSEED=random \
+    PYTHONFAULTHANDLER=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PATH="/opt/venv/bin:$PATH" \
@@ -54,31 +57,27 @@ WORKDIR $APP_HOME
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # PostgreSQL client
     libpq5 \
-    # PostGIS runtime
     gdal-bin \
     libgdal32 \
     libgeos-c1v5 \
     libproj25 \
-    # Image processing
     libjpeg62-turbo \
     libpng16-16 \
     libwebp7 \
-    # Utilities
     curl \
     gettext \
-    # Security updates
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && apt-get clean \
+    && apt-get autoremove -y
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
 
 # Create non-root user
-RUN groupadd --system --gid 1001 diwani \
-    && useradd --system --uid 1001 --gid 1001 --home-dir $APP_HOME --shell /sbin/nologin diwani
+RUN groupadd --system --gid 1000 diwani \
+    && useradd --system --uid 1000 --gid 1000 --home-dir $APP_HOME --shell /sbin/nologin diwani
 
 # Create necessary directories
 RUN mkdir -p $APP_HOME/static $APP_HOME/media $APP_HOME/logs \
@@ -87,17 +86,22 @@ RUN mkdir -p $APP_HOME/static $APP_HOME/media $APP_HOME/logs \
 # Copy application code
 COPY --chown=diwani:diwani . .
 
-# Remove unnecessary files
+# Remove unnecessary files for security
 RUN rm -rf \
     .git \
     .gitignore \
+    .env* \
     *.md \
     Dockerfile* \
     docker-compose* \
     tests/ \
+    docs/ \
     .pytest_cache \
     __pycache__ \
-    *.pyc
+    *.pyc \
+    .coverage \
+    htmlcov \
+    2>/dev/null || true
 
 # Switch to non-root user
 USER diwani
@@ -109,5 +113,18 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/api/health/ || exit 1
 
-# Default command
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--threads", "2"]
+# Production command with optimized settings
+CMD ["gunicorn", "config.wsgi:application", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "4", \
+     "--threads", "2", \
+     "--worker-class", "gthread", \
+     "--worker-tmp-dir", "/dev/shm", \
+     "--timeout", "120", \
+     "--graceful-timeout", "30", \
+     "--keep-alive", "5", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "50", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--capture-output"]
