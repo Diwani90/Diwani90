@@ -59,6 +59,10 @@ api = NinjaExtraAPI(
 # Register API Routers
 # ===================================
 
+# Users API - المصادقة والمستخدمين
+from apps.users.api import router as users_router
+api.add_router('/users', users_router, tags=['المستخدمين'])
+
 # Products API - المنتجات والأقسام
 from apps.products.api import router as products_router
 api.add_router('/products', products_router, tags=['المنتجات'])
@@ -66,6 +70,10 @@ api.add_router('/products', products_router, tags=['المنتجات'])
 # Stores API - المتاجر والبائعين
 from apps.stores.api import router as stores_router
 api.add_router('/stores', stores_router, tags=['المتاجر'])
+
+# Orders API - الطلبات والتوصيل
+from apps.orders.api import router as orders_router
+api.add_router('/orders', orders_router, tags=['الطلبات'])
 
 # Finance API - النظام المالي
 from apps.finance.api import router as finance_router

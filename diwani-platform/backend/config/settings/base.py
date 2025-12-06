@@ -54,19 +54,16 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-    'apps.core.apps.CoreConfig',
-    'apps.accounts.apps.AccountsConfig',
-    'apps.stores.apps.StoresConfig',
-    'apps.products.apps.ProductsConfig',
-    'apps.orders.apps.OrdersConfig',
-    'apps.delivery.apps.DeliveryConfig',
-    'apps.payments.apps.PaymentsConfig',
-    'apps.notifications.apps.NotificationsConfig',
+    'apps.core.apps.CoreConfig',  # النواة والـ Middleware
+    'apps.users.apps.UsersConfig',  # نظام المستخدمين والمصادقة
+    'apps.stores.apps.StoresConfig',  # المتاجر
+    'apps.products.apps.ProductsConfig',  # المنتجات
+    'apps.orders.apps.OrdersConfig',  # الطلبات
+    'apps.finance.apps.FinanceConfig',  # النظام المالي
+    'apps.notifications.apps.NotificationsConfig',  # الإشعارات
     'apps.search.apps.SearchConfig',  # البحث المتقدم
     'apps.realtime.apps.RealtimeConfig',  # Real-time & WebSockets
     'apps.chat.apps.ChatConfig',  # المحادثات
-    'apps.tracking.apps.TrackingConfig',  # التتبع الحي
-    'apps.finance.apps.FinanceConfig',  # النظام المالي
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -75,10 +72,11 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # Middleware
 # ===================================
 MIDDLEWARE = [
-    # Security (First Layer)
-    'apps.core.security.SecurityHeadersMiddleware',
-    'apps.core.security.RateLimitMiddleware',
-    'apps.core.security.SecurityAuditMiddleware',
+    # Security & Performance (First Layer)
+    'apps.core.middleware.RequestIDMiddleware',
+    'apps.core.middleware.SecurityHeadersMiddleware',
+    'apps.core.middleware.RateLimitMiddleware',
+    'apps.core.middleware.RequestLoggingMiddleware',
     # Django Core
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -90,6 +88,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Error Handling (Last Layer)
+    'apps.core.middleware.JSONErrorMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -168,7 +168,10 @@ SESSION_CACHE_ALIAS = 'default'
 # ===================================
 # Custom User Model
 # ===================================
-AUTH_USER_MODEL = 'accounts.User'
+AUTH_USER_MODEL = 'users.User'
+
+# JWT Secret Key (for users.services)
+JWT_SECRET_KEY = env('JWT_SECRET_KEY', default=SECRET_KEY)
 
 # ===================================
 # Password Validation

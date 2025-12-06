@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Count
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Router, Query
@@ -403,7 +403,7 @@ def financial_summary(
         status='completed'
     ).aggregate(
         total_sales=Sum('amount'),
-        count=models.Count('id'),
+        count=Count('id'),
     )
 
     # إحصائيات السحوبات
@@ -453,9 +453,9 @@ def reconciliation_report(
         queryset = queryset.filter(reconciliation_date__lte=end_date)
 
     stats = queryset.aggregate(
-        total=models.Count('id'),
-        matched=models.Count('id', filter=Q(status='matched')),
-        discrepancies=models.Count('id', filter=Q(status='discrepancy')),
+        total=Count('id'),
+        matched=Count('id', filter=Q(status='matched')),
+        discrepancies=Count('id', filter=Q(status='discrepancy')),
     )
 
     return {
