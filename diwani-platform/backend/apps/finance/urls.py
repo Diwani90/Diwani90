@@ -11,6 +11,6 @@ app_name = 'finance'
 
 urlpatterns = [
     # Webhooks
-    path('webhooks/tap/', webhooks.tap_webhook, name='tap_webhook'),
-    path('webhooks/accounting/', webhooks.accounting_webhook, name='accounting_webhook'),
+    path('tap/', webhooks.tap_webhook, name='tap_webhook'),
+    path('accounting/', webhooks.accounting_webhook, name='accounting_webhook'),
 ]

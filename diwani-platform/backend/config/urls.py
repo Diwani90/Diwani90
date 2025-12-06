@@ -8,41 +8,29 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from ninja import NinjaAPI
-from ninja_jwt.controller import NinjaJWTDefaultController
 from ninja_extra import NinjaExtraAPI
-
-# ===================================
-# Import Routers
-# ===================================
-from apps.accounts.api import router as accounts_router
-from apps.stores.api import router as stores_router
-from apps.products.api import router as products_router
-from apps.orders.api import router as orders_router
-from apps.payments.api import router as payments_router
-from apps.notifications.api import router as notifications_router
-from apps.delivery.api import router as delivery_router
-from apps.search.api import router as search_router
 
 # ===================================
 # API Configuration
 # ===================================
 api = NinjaExtraAPI(
     title='Diwani API - منصة ديواني',
-    version='1.0.0',
+    version='2.0.0',
     description='''
     # 🏗️ منصة ديواني لمواد البناء
 
-    منصة سعودية متكاملة للتجارة الإلكترونية في مواد البناء
+    منصة سعودية متكاملة للتجارة الإلكترونية في مواد البناء والخدمات اللوجستية
 
     ## 📦 الميزات الرئيسية:
     - 👤 المصادقة والمستخدمين (OTP، JWT)
     - 🏪 إدارة المتاجر والموردين
-    - 📦 المنتجات والمخزون
+    - 📦 المنتجات (مخزون + حسب الطلب)
     - 🛒 سلة التسوق والطلبات
-    - 💳 بوابات الدفع (مدى، Apple Pay)
+    - 💳 المدفوعات (Tap Connect)
     - 🚚 التوصيل والتتبع اللحظي
-    - ⭐ التقييمات والمراجعات
+    - 💰 النظام المالي والتسوية
+    - 🔍 البحث المتقدم (Elasticsearch)
+    - 💬 المحادثات (WebSocket)
     - 🔔 الإشعارات الفورية
 
     ## 🔐 المصادقة:
@@ -51,44 +39,61 @@ api = NinjaExtraAPI(
     Authorization: Bearer <your_token>
     ```
 
+    ## 💰 التسعير المرن:
+    يدعم النظام أنواع تسعير متعددة:
+    - سعر ثابت، بالساعة، باليوم
+    - بالكيلومتر، بالوزن، بالحجم
+    - متدرج (خصومات الكميات)
+    - حسب العرض، مجاني
+
     ## 📍 التغطية الجغرافية:
-    - جميع المناطق السعودية
-    - الرياض، جدة، الدمام، مكة، المدينة...
+    جميع المناطق السعودية
 
     ---
-    **الإصدار:** 1.0.0 | **التاريخ:** 2024
+    **الإصدار:** 2.0.0 | **التاريخ:** 2025
     ''',
     urls_namespace='api',
 )
 
 # ===================================
-# Register Controllers & Routers
-# ===================================
-# JWT Authentication Controller
-api.register_controllers(NinjaJWTDefaultController)
-
 # Register API Routers
-api.add_router('/accounts', accounts_router, tags=['المستخدمين والمصادقة'])
-api.add_router('/stores', stores_router, tags=['المتاجر'])
+# ===================================
+
+# Products API - المنتجات والأقسام
+from apps.products.api import router as products_router
 api.add_router('/products', products_router, tags=['المنتجات'])
-api.add_router('/orders', orders_router, tags=['السلة والطلبات'])
-api.add_router('/payments', payments_router, tags=['المدفوعات'])
-api.add_router('/notifications', notifications_router, tags=['الإشعارات'])
-api.add_router('/delivery', delivery_router, tags=['التوصيل'])
-api.add_router('/search', search_router, tags=['البحث المتقدم'])
+
+# Stores API - المتاجر والبائعين
+from apps.stores.api import router as stores_router
+api.add_router('/stores', stores_router, tags=['المتاجر'])
+
+# Finance API - النظام المالي
+from apps.finance.api import router as finance_router
+api.add_router('/finance', finance_router, tags=['المالية'])
+
+# Search API - البحث المتقدم
+from apps.search.api import router as search_router
+api.add_router('/search', search_router, tags=['البحث'])
 
 # ===================================
 # URL Patterns
 # ===================================
 urlpatterns = [
-    # Admin Panel
+    # Admin Panel - لوحة التحكم
     path('admin/', admin.site.urls),
 
-    # API v1 - Main API with all routers
+    # API v1 - واجهة برمجة التطبيقات
     path('api/v1/', api.urls),
 
-    # Health Check
-    path('api/health/', include('apps.core.urls')),
+    # Finance Webhooks - استقبال أحداث Tap والمحاسبة
+    path('webhooks/', include('apps.finance.urls')),
+
+    # Health Check - فحص الحالة
+    path('health/', lambda r: __import__('django.http', fromlist=['JsonResponse']).JsonResponse({
+        'status': 'healthy',
+        'version': '2.0.0',
+        'platform': 'Diwani'
+    })),
 ]
 
 # ===================================
