@@ -50,6 +50,7 @@ THIRD_PARTY_APPS = [
     'django_extensions',
     'django_celery_beat',
     'django_celery_results',
+    'channels',  # WebSockets
 ]
 
 LOCAL_APPS = [
@@ -62,6 +63,9 @@ LOCAL_APPS = [
     'apps.payments.apps.PaymentsConfig',
     'apps.notifications.apps.NotificationsConfig',
     'apps.search.apps.SearchConfig',  # البحث المتقدم
+    'apps.realtime.apps.RealtimeConfig',  # Real-time & WebSockets
+    'apps.chat.apps.ChatConfig',  # المحادثات
+    'apps.tracking.apps.TrackingConfig',  # التتبع الحي
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -300,6 +304,61 @@ SEARCH_SETTINGS = {
     'SUGGESTION_LIMIT': 10,
     'FUZZY_ENABLED': True,
     'HIGHLIGHT_ENABLED': True,
+}
+
+# ===================================
+# Django Channels Configuration
+# Real-time WebSockets
+# ===================================
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [env('REDIS_URL', default='redis://localhost:6379/0')],
+            'capacity': 1500,
+            'expiry': 10,
+        },
+    },
+}
+
+# Real-time Settings
+REALTIME_SETTINGS = {
+    # Connection
+    'HEARTBEAT_INTERVAL': 30,  # seconds
+    'CONNECTION_TIMEOUT': 120,  # seconds
+    'MAX_CONNECTIONS_PER_USER': 5,
+
+    # Rate Limiting
+    'MAX_MESSAGES_PER_MINUTE': 100,
+    'BURST_SIZE': 20,
+
+    # Backpressure
+    'QUEUE_SIZE': 1000,
+    'HIGH_WATERMARK': 800,
+    'LOW_WATERMARK': 200,
+
+    # Presence
+    'ONLINE_THRESHOLD': 30,  # seconds
+    'AWAY_THRESHOLD': 300,  # 5 minutes
+    'OFFLINE_THRESHOLD': 600,  # 10 minutes
+}
+
+# Chat Settings
+CHAT_SETTINGS = {
+    'MAX_MESSAGE_LENGTH': 4000,
+    'MAX_ATTACHMENTS_PER_MESSAGE': 10,
+    'MAX_ATTACHMENT_SIZE_MB': 25,
+    'MESSAGE_EDIT_TIMEOUT_MINUTES': 5,
+    'TYPING_INDICATOR_TIMEOUT': 10,  # seconds
+    'ENCRYPTION_ENABLED': True,
+}
+
+# Tracking Settings
+TRACKING_SETTINGS = {
+    'LOCATION_UPDATE_INTERVAL': 5,  # seconds
+    'MAX_HISTORY_POINTS': 1000,
+    'GEOFENCE_RADIUS_DEFAULT': 100,  # meters
+    'ETA_RECALCULATE_INTERVAL': 30,  # seconds
 }
 
 # ===================================

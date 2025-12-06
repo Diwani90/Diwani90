@@ -72,6 +72,13 @@ shortuuid==1.0.13
 python-slugify==8.0.4
 
 # ===================
+# Real-time & WebSockets
+# ===================
+channels==4.0.0
+channels-redis==4.2.0
+daphne==4.1.0
+
+# ===================
 # Search Engine
 # ===================
 elasticsearch==8.11.0
