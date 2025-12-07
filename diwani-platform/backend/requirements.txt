@@ -1,98 +1,76 @@
 # ===================================
 # منصة ديواني - المتطلبات التقنية
-# Diwani Platform - Production Requirements
+# Diwani Platform - Requirements
 # ===================================
 
-# ===================
 # Django Core
-# ===================
-Django==5.1.3
-django-environ==0.11.2
-django-cors-headers==4.6.0
-django-filter==24.3
-django-extensions==3.2.3
+Django
+django-environ
+django-cors-headers
+django-filter
+django-extensions
 
-# ===================
 # Django Ninja API
-# ===================
-django-ninja==1.3.0
-django-ninja-extra==0.21.0
-django-ninja-jwt==5.3.3
-pydantic==2.9.2
-email-validator==2.1.0
+django-ninja
+django-ninja-extra
+django-ninja-jwt
+pydantic
+email-validator
 
-# ===================
 # Database
-# ===================
-psycopg2-binary==2.9.10
-dj-database-url==2.2.0
-django-redis==5.4.0
-redis==5.2.0
+psycopg2-binary
+dj-database-url
+django-redis
+redis
 
-# ===================
 # Authentication & Security
-# ===================
-PyJWT==2.10.0
-python-jose==3.3.0
-argon2-cffi==23.1.0
-django-otp==1.5.4
-phonenumbers==8.13.50
+PyJWT
+python-jose
+argon2-cffi
+django-otp
+phonenumbers
 
-# Security (Saudi NCA/PDPL Compliance)
-django-csp==3.8
-django-ratelimit==4.1.0
-django-axes==6.5.1
-django-cryptography==1.1
-cryptography==43.0.3
-bleach==6.2.0
-python-ipware==3.0.0
-django-permissions-policy==4.21.0
+# Security
+django-csp
+django-ratelimit
+django-axes
+django-cryptography
+cryptography
+bleach
+python-ipware
+django-permissions-policy
 
-# ===================
 # Background Tasks
-# ===================
-celery==5.4.0
-django-celery-beat==2.7.0
-django-celery-results==2.5.1
+celery
+django-celery-beat
+django-celery-results
 
-# ===================
 # File & Media
-# ===================
-Pillow==11.0.0
-python-magic==0.4.27
-django-storages==1.14.4
-boto3==1.35.71
+Pillow
+python-magic
+django-storages
+boto3
 
-# ===================
 # Utilities
-# ===================
-python-dateutil==2.9.0
-pytz==2024.2
-shortuuid==1.0.13
-python-slugify==8.0.4
+python-dateutil
+pytz
+shortuuid
+python-slugify
 
-# ===================
 # Real-time & WebSockets
-# ===================
-channels==4.0.0
-channels-redis==4.2.0
-daphne==4.1.0
+channels
+channels-redis
+daphne
 
-# ===================
 # Search Engine
-# ===================
-elasticsearch==8.11.0
-elasticsearch-dsl==8.11.0
+elasticsearch
+elasticsearch-dsl
 
-# ===================
 # Monitoring & Logging
-# ===================
-sentry-sdk==2.19.0
-structlog==24.4.0
-python-json-logger==2.0.7
+sentry-sdk
+structlog
+python-json-logger
 
-# ===================
 # Production Server
-# ===================
-gunicorn==23.0.0
-whitenoise==6.8.2
+gunicorn
+whitenoise
