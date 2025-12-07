@@ -284,8 +284,19 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
 
         # Content Security Policy (للـ API)
-        if request.path.startswith('/api/'):
+        # استثناء صفحات التوثيق (Swagger UI) من CSP الصارم
+        if request.path.startswith('/api/') and not request.path.endswith(('/docs', '/openapi.json')):
             response['Content-Security-Policy'] = "default-src 'none'"
+        elif request.path.endswith('/docs'):
+            # CSP مرن لـ Swagger UI
+            response['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https://django-ninja.dev; "
+                "font-src 'self' https://cdn.jsdelivr.net; "
+                "connect-src 'self'"
+            )
 
         # HSTS (في الإنتاج فقط)
         if not settings.DEBUG:
