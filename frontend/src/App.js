@@ -11,6 +11,7 @@ import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import CustomerDashboard from './components/customer/CustomerDashboard';
 import SupplierDashboard from './components/supplier/SupplierDashboard';
 import DriverDashboard from './components/driver/DriverDashboard';
+import AdminDashboard from './components/admin/AdminDashboard';
 import ProductCatalog from './components/product/ProductCatalog';
 import ProductDetail from './components/product/ProductDetail';
 import CartPage from './components/cart/CartPage';
@@ -246,6 +247,33 @@ function App() {
                     </ProtectedRoute>
                   } />
 
+                  {/* Admin Routes */}
+                  <Route path="/admin/dashboard" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/users" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/vendors" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/orders" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/finance" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+
                   {/* Chat */}
                   <Route path="/chat" element={
                     <ProtectedRoute>
@@ -278,7 +306,9 @@ function App() {
 const DashboardRedirect = () => {
   const { user } = useAuth();
 
-  if (user.role === 'customer') {
+  if (user.role === 'admin') {
+    return <Navigate to="/admin/dashboard" replace />;
+  } else if (user.role === 'customer') {
     return <Navigate to="/customer/dashboard" replace />;
   } else if (user.role === 'supplier' || user.role === 'vendor') {
     return <Navigate to="/supplier/dashboard" replace />;
