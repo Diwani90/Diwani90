@@ -64,6 +64,7 @@ LOCAL_APPS = [
     'apps.search.apps.SearchConfig',  # البحث المتقدم
     'apps.realtime.apps.RealtimeConfig',  # Real-time & WebSockets
     'apps.chat.apps.ChatConfig',  # المحادثات
+    'apps.tracking.apps.TrackingConfig',  # نظام التتبع والتوصيل
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
