@@ -24,6 +24,8 @@ from .models import (
     OrderDelivery,
     OrderReview,
     OrderRefund,
+    Cart,
+    CartItem,
 )
 from .schemas import (
     OrderSchema,
@@ -713,3 +715,129 @@ def _update_vendor_rating(vendor):
     if avg_rating:
         vendor.rating = avg_rating
         vendor.save(update_fields=['rating'])
+
+
+# =============================================
+# سلة التسوق
+# =============================================
+
+@router.get('/cart', auth=JWTAuth(), tags=['السلة'])
+def get_cart(request):
+    """الحصول على سلة التسوق"""
+    cart, created = Cart.objects.get_or_create(user=request.user)
+
+    items = []
+    for item in cart.items.select_related('product', 'product__category').all():
+        items.append({
+            'cart_item': {
+                'id': str(item.id),
+                'quantity': item.quantity,
+                'created_at': item.created_at.isoformat(),
+            },
+            'product': {
+                'id': str(item.product.id),
+                'name': item.product.name,
+                'name_en': item.product.name_en,
+                'price': float(item.product.price),
+                'unit': item.product.unit,
+                'images': list(item.product.images.values_list('image', flat=True)[:1]),
+                'available_quantity': float(item.product.available_quantity) if item.product.available_quantity else 0,
+                'minimum_order': float(item.product.minimum_order) if item.product.minimum_order else 1,
+                'supplier_id': str(item.product.vendor_id) if item.product.vendor_id else None,
+            },
+            'unit_price': float(item.unit_price),
+            'total_price': float(item.total_price),
+        })
+
+    return {
+        'items': items,
+        'total_items': cart.total_items,
+        'total_price': float(cart.total_price),
+    }
+
+
+@router.post('/cart/add', auth=JWTAuth(), tags=['السلة'])
+def add_to_cart(request, product_id: UUID, quantity: int = 1):
+    """إضافة منتج للسلة"""
+    from apps.products.models import Product
+
+    # التحقق من وجود المنتج
+    product = get_object_or_404(Product, id=product_id)
+
+    # التحقق من التوفر
+    if quantity > product.available_quantity:
+        return {'error': 'الكمية المطلوبة غير متوفرة', 'success': False}
+
+    if quantity < product.minimum_order:
+        return {'error': f'الحد الأدنى للطلب هو {product.minimum_order}', 'success': False}
+
+    # الحصول على السلة أو إنشاؤها
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+
+    # إضافة المنتج أو تحديث الكمية
+    cart_item, created = CartItem.objects.get_or_create(
+        cart=cart,
+        product=product,
+        defaults={'quantity': quantity}
+    )
+
+    if not created:
+        cart_item.quantity += quantity
+        cart_item.save()
+
+    return {
+        'message': 'تم إضافة المنتج للسلة',
+        'success': True,
+        'cart_item_id': str(cart_item.id),
+        'quantity': cart_item.quantity,
+    }
+
+
+@router.put('/cart/{item_id}', auth=JWTAuth(), tags=['السلة'])
+def update_cart_item(request, item_id: UUID, quantity: int):
+    """تحديث كمية عنصر في السلة"""
+    cart_item = get_object_or_404(
+        CartItem,
+        id=item_id,
+        cart__user=request.user
+    )
+
+    if quantity <= 0:
+        cart_item.delete()
+        return {'message': 'تم حذف المنتج من السلة', 'success': True}
+
+    if quantity > cart_item.product.available_quantity:
+        return {'error': 'الكمية المطلوبة غير متوفرة', 'success': False}
+
+    cart_item.quantity = quantity
+    cart_item.save()
+
+    return {
+        'message': 'تم تحديث الكمية',
+        'success': True,
+        'quantity': cart_item.quantity,
+        'total_price': float(cart_item.total_price),
+    }
+
+
+@router.delete('/cart/{item_id}', auth=JWTAuth(), tags=['السلة'])
+def remove_from_cart(request, item_id: UUID):
+    """حذف منتج من السلة"""
+    cart_item = get_object_or_404(
+        CartItem,
+        id=item_id,
+        cart__user=request.user
+    )
+
+    cart_item.delete()
+
+    return {'message': 'تم حذف المنتج من السلة', 'success': True}
+
+
+@router.delete('/cart', auth=JWTAuth(), tags=['السلة'])
+def clear_cart(request):
+    """تفريغ السلة"""
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+    cart.items.all().delete()
+
+    return {'message': 'تم تفريغ السلة', 'success': True}

@@ -118,7 +118,9 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/auth/register', userData);
+      // Note: Registration is now handled directly in RegisterPage with phone+OTP
+      // This is kept for legacy compatibility
+      const response = await axios.post('/users/auth/register/customer', userData);
       dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
       return { success: true };
     } catch (error) {

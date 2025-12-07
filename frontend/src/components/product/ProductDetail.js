@@ -32,18 +32,26 @@ const ProductDetail = () => {
 
   const fetchProductDetail = async () => {
     try {
-      const [productResponse, reviewsResponse] = await Promise.all([
-        axios.get(`/products/${id}`),
-        axios.get(`/reviews?product_id=${id}`)
-      ]);
-      
+      const productResponse = await axios.get(`/products/products/${id}`);
       setProduct(productResponse.data);
-      setReviews(reviewsResponse.data || []);
-      
-      // Fetch supplier info
-      if (productResponse.data.supplier_id) {
-        const supplierResponse = await axios.get(`/suppliers/${productResponse.data.supplier_id}`);
-        setSupplier(supplierResponse.data);
+
+      // Fetch reviews
+      try {
+        const reviewsResponse = await axios.get(`/products/products/${id}/reviews`);
+        setReviews(reviewsResponse.data || []);
+      } catch {
+        // Reviews endpoint may not exist, ignore error
+        setReviews([]);
+      }
+
+      // Fetch store/vendor info
+      if (productResponse.data.vendor_id) {
+        try {
+          const storeResponse = await axios.get(`/stores/stores/${productResponse.data.vendor_id}`);
+          setSupplier(storeResponse.data);
+        } catch {
+          // Store endpoint may fail, ignore
+        }
       }
     } catch (error) {
       console.error('Error fetching product detail:', error);
@@ -75,9 +83,11 @@ const ProductDetail = () => {
     }
 
     try {
-      await axios.post('/cart/add', {
-        product_id: product.id,
-        quantity: quantity
+      await axios.post('/orders/cart/add', null, {
+        params: {
+          product_id: product.id,
+          quantity: quantity
+        }
       });
       toast.success('تم بنجاح', 'تم إضافة المنتج للسلة');
     } catch (error) {

@@ -55,7 +55,7 @@ const ForgotPasswordPage = () => {
 
     try {
       // إرسال OTP لرقم الهاتف (نفس endpoint تسجيل الدخول)
-      await axios.post('/auth/login', { phone_number: phone });
+      await axios.post('/users/auth/login', { phone_number: phone });
       setSent(true);
       toast.success('تم الإرسال', 'تم إرسال رمز التحقق إلى رقم هاتفك');
     } catch (err) {

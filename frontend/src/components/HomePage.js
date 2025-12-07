@@ -31,8 +31,8 @@ const HomePage = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('/categories');
-      setCategories(response.data.categories);
+      const response = await axios.get('/products/categories');
+      setCategories(response.data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -40,8 +40,8 @@ const HomePage = () => {
 
   const fetchFeaturedProducts = async () => {
     try {
-      const response = await axios.get('/products?limit=8');
-      setFeaturedProducts(response.data);
+      const response = await axios.get('/products/products?limit=8');
+      setFeaturedProducts(response.data?.items || response.data || []);
     } catch (error) {
       console.error('Error fetching featured products:', error);
     }

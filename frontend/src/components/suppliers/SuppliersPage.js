@@ -54,8 +54,8 @@ const SuppliersPage = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('/categories');
-      setCategories(response.data.categories);
+      const response = await axios.get('/products/categories');
+      setCategories(response.data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -76,15 +76,18 @@ const SuppliersPage = () => {
         queryParams.skip = 0;
       }
 
-      const response = await axios.get('/suppliers', { params: queryParams });
-      
+      const response = await axios.get('/stores/stores', { params: queryParams });
+
+      // Handle paginated response from backend
+      const storesList = response.data?.items || response.data || [];
+
       if (reset) {
-        setSuppliers(response.data);
+        setSuppliers(storesList);
       } else {
-        setSuppliers(prev => [...prev, ...response.data]);
+        setSuppliers(prev => [...prev, ...storesList]);
       }
-      
-      setHasMore(response.data.length === filters.limit);
+
+      setHasMore(storesList.length === filters.limit);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
       toast.error('خطأ', 'حدث خطأ في تحميل الموردين');
@@ -249,14 +252,18 @@ const SuppliersPage = () => {
                   <div className="card-body">
                     {/* Supplier Header */}
                     <div className="flex items-center mb-4">
-                      <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center ml-4">
-                        <BuildingOfficeIcon className="h-8 w-8 text-blue-600" />
-                      </div>
+                      {supplier.logo ? (
+                        <img src={supplier.logo} alt={supplier.name} className="w-16 h-16 rounded-full object-cover ml-4" />
+                      ) : (
+                        <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center ml-4">
+                          <BuildingOfficeIcon className="h-8 w-8 text-blue-600" />
+                        </div>
+                      )}
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                          {supplier.company_name}
+                          {supplier.name}
                         </h3>
-                        <p className="text-sm text-gray-600">{supplier.full_name}</p>
+                        <p className="text-sm text-gray-600">{supplier.name_en || supplier.store_type}</p>
                       </div>
                     </div>
 
@@ -264,7 +271,7 @@ const SuppliersPage = () => {
                     <div className="flex items-center mb-3">
                       <div className="flex items-center">
                         {[...Array(5)].map((_, i) => (
-                          i < Math.floor(supplier.rating) ? (
+                          i < Math.floor(supplier.rating || 0) ? (
                             <StarIconSolid key={i} className="h-4 w-4 text-yellow-400" />
                           ) : (
                             <StarIcon key={i} className="h-4 w-4 text-gray-300" />
@@ -272,38 +279,14 @@ const SuppliersPage = () => {
                         ))}
                       </div>
                       <span className="text-sm text-gray-600 mr-2">
-                        ({supplier.total_reviews} تقييم)
+                        ({supplier.reviews_count || 0} تقييم)
                       </span>
                     </div>
 
                     {/* Description */}
                     <p className="text-gray-700 text-sm mb-4 line-clamp-3">
-                      {supplier.business_description}
+                      {supplier.short_description || supplier.description || 'لا يوجد وصف'}
                     </p>
-
-                    {/* Categories */}
-                    {supplier.categories && supplier.categories.length > 0 && (
-                      <div className="mb-4">
-                        <div className="flex flex-wrap gap-2">
-                          {supplier.categories.slice(0, 3).map((categoryId) => {
-                            const category = categories.find(c => c.id === categoryId);
-                            return category ? (
-                              <span
-                                key={categoryId}
-                                className="badge badge-primary text-xs"
-                              >
-                                {category.name}
-                              </span>
-                            ) : null;
-                          })}
-                          {supplier.categories.length > 3 && (
-                            <span className="badge badge-info text-xs">
-                              +{supplier.categories.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
 
                     {/* Location */}
                     {supplier.city && (
@@ -316,7 +299,7 @@ const SuppliersPage = () => {
                     {/* Actions */}
                     <div className="flex gap-3">
                       <Link
-                        to={`/products?supplier_id=${supplier.id}`}
+                        to={`/products?vendor_id=${supplier.id}`}
                         className="flex-1 btn-primary text-center text-sm"
                       >
                         عرض المنتجات
