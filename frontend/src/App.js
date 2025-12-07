@@ -20,7 +20,7 @@ import Navigation from './components/layout/Navigation';
 import { ToastProvider } from './components/ui/toast';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const API = `${BACKEND_URL}/api/v1`;
 
 // Configure axios defaults
 axios.defaults.baseURL = API;
