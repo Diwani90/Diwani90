@@ -25,7 +25,7 @@ from django.utils import timezone
 from ninja import Router, Query
 from ninja.pagination import paginate, PageNumberPagination
 
-from apps.core.auth import AuthBearer, get_current_user
+from apps.users.auth import JWTAuth, get_current_user
 from apps.users.models import User
 
 from .models import (
@@ -101,7 +101,7 @@ def delivery_to_response(delivery: Delivery) -> dict:
 # Delivery Endpoints
 # =============================================
 
-@router.post("/deliveries", response={201: DeliveryResponseSchema}, auth=AuthBearer())
+@router.post("/deliveries", response={201: DeliveryResponseSchema}, auth=JWTAuth())
 def create_delivery(request, payload: DeliveryCreateSchema):
     """إنشاء توصيل جديد"""
     user = get_current_user(request)
@@ -153,7 +153,7 @@ def create_delivery(request, payload: DeliveryCreateSchema):
     return 201, delivery_to_response(delivery)
 
 
-@router.get("/deliveries", response=DeliveryListResponseSchema, auth=AuthBearer())
+@router.get("/deliveries", response=DeliveryListResponseSchema, auth=JWTAuth())
 def list_deliveries(
     request,
     status: Optional[str] = None,
@@ -203,14 +203,14 @@ def list_deliveries(
     }
 
 
-@router.get("/deliveries/{delivery_id}", response=DeliveryResponseSchema, auth=AuthBearer())
+@router.get("/deliveries/{delivery_id}", response=DeliveryResponseSchema, auth=JWTAuth())
 def get_delivery(request, delivery_id: UUID):
     """تفاصيل التوصيل"""
     delivery = get_object_or_404(Delivery, id=delivery_id)
     return delivery_to_response(delivery)
 
 
-@router.get("/deliveries/{delivery_id}/tracking", response=DeliveryTrackingResponseSchema, auth=AuthBearer())
+@router.get("/deliveries/{delivery_id}/tracking", response=DeliveryTrackingResponseSchema, auth=JWTAuth())
 def get_delivery_tracking(request, delivery_id: UUID):
     """تتبع التوصيل الكامل"""
     delivery = get_object_or_404(Delivery, id=delivery_id)
@@ -279,7 +279,7 @@ def get_delivery_tracking(request, delivery_id: UUID):
     }
 
 
-@router.post("/deliveries/{delivery_id}/assign", response=DeliveryResponseSchema, auth=AuthBearer())
+@router.post("/deliveries/{delivery_id}/assign", response=DeliveryResponseSchema, auth=JWTAuth())
 def assign_driver(request, delivery_id: UUID, payload: DeliveryAssignSchema):
     """تعيين سائق للتوصيل"""
     user = get_current_user(request)
@@ -313,7 +313,7 @@ def assign_driver(request, delivery_id: UUID, payload: DeliveryAssignSchema):
     return delivery_to_response(delivery)
 
 
-@router.post("/deliveries/{delivery_id}/status", response=DeliveryResponseSchema, auth=AuthBearer())
+@router.post("/deliveries/{delivery_id}/status", response=DeliveryResponseSchema, auth=JWTAuth())
 def update_delivery_status(request, delivery_id: UUID, payload: DeliveryStatusUpdateSchema):
     """تحديث حالة التوصيل"""
     user = get_current_user(request)
@@ -364,7 +364,7 @@ def update_delivery_status(request, delivery_id: UUID, payload: DeliveryStatusUp
     return delivery_to_response(delivery)
 
 
-@router.post("/deliveries/{delivery_id}/complete", response=DeliveryResponseSchema, auth=AuthBearer())
+@router.post("/deliveries/{delivery_id}/complete", response=DeliveryResponseSchema, auth=JWTAuth())
 def complete_delivery(request, delivery_id: UUID, payload: DeliveryCompleteSchema):
     """إتمام التوصيل"""
     user = get_current_user(request)
@@ -397,7 +397,7 @@ def complete_delivery(request, delivery_id: UUID, payload: DeliveryCompleteSchem
     return delivery_to_response(delivery)
 
 
-@router.post("/deliveries/{delivery_id}/fail", response=DeliveryResponseSchema, auth=AuthBearer())
+@router.post("/deliveries/{delivery_id}/fail", response=DeliveryResponseSchema, auth=JWTAuth())
 def fail_delivery(request, delivery_id: UUID, payload: DeliveryFailSchema):
     """تسجيل فشل التوصيل"""
     user = get_current_user(request)
@@ -427,7 +427,7 @@ def fail_delivery(request, delivery_id: UUID, payload: DeliveryFailSchema):
     return delivery_to_response(delivery)
 
 
-@router.post("/deliveries/{delivery_id}/cancel", response=DeliveryResponseSchema, auth=AuthBearer())
+@router.post("/deliveries/{delivery_id}/cancel", response=DeliveryResponseSchema, auth=JWTAuth())
 def cancel_delivery(request, delivery_id: UUID, payload: DeliveryCancelSchema):
     """إلغاء التوصيل"""
     user = get_current_user(request)
@@ -455,7 +455,7 @@ def cancel_delivery(request, delivery_id: UUID, payload: DeliveryCancelSchema):
     return delivery_to_response(delivery)
 
 
-@router.post("/deliveries/{delivery_id}/rate", response=DeliveryResponseSchema, auth=AuthBearer())
+@router.post("/deliveries/{delivery_id}/rate", response=DeliveryResponseSchema, auth=JWTAuth())
 def rate_delivery(request, delivery_id: UUID, payload: DeliveryRatingSchema):
     """تقييم التوصيل"""
     user = get_current_user(request)
@@ -475,7 +475,7 @@ def rate_delivery(request, delivery_id: UUID, payload: DeliveryRatingSchema):
 # Location Tracking Endpoints
 # =============================================
 
-@router.post("/deliveries/{delivery_id}/location", auth=AuthBearer())
+@router.post("/deliveries/{delivery_id}/location", auth=JWTAuth())
 def update_delivery_location(request, delivery_id: UUID, payload: LocationUpdateSchema):
     """تحديث موقع التوصيل"""
     user = get_current_user(request)
@@ -508,7 +508,7 @@ def update_delivery_location(request, delivery_id: UUID, payload: LocationUpdate
     return {"success": True}
 
 
-@router.post("/driver/location", auth=AuthBearer())
+@router.post("/driver/location", auth=JWTAuth())
 def update_driver_location(request, payload: LocationUpdateSchema):
     """تحديث موقع السائق"""
     user = get_current_user(request)
@@ -532,7 +532,7 @@ def update_driver_location(request, payload: LocationUpdateSchema):
     return {"success": True}
 
 
-@router.get("/driver/location", response=DriverLocationSchema, auth=AuthBearer())
+@router.get("/driver/location", response=DriverLocationSchema, auth=JWTAuth())
 def get_driver_location(request):
     """الحصول على موقع السائق الحالي"""
     user = get_current_user(request)
@@ -557,7 +557,7 @@ def get_driver_location(request):
     }
 
 
-@router.post("/driver/availability", auth=AuthBearer())
+@router.post("/driver/availability", auth=JWTAuth())
 def update_driver_availability(request, payload: DriverAvailabilitySchema):
     """تحديث توفر السائق"""
     user = get_current_user(request)
@@ -572,7 +572,7 @@ def update_driver_availability(request, payload: DriverAvailabilitySchema):
     return {"success": True, "is_available": payload.is_available}
 
 
-@router.post("/driver/online", auth=AuthBearer())
+@router.post("/driver/online", auth=JWTAuth())
 def update_driver_online_status(request, payload: DriverOnlineStatusSchema):
     """تحديث حالة الاتصال"""
     user = get_current_user(request)
@@ -588,7 +588,7 @@ def update_driver_online_status(request, payload: DriverOnlineStatusSchema):
     return {"success": True, "is_online": payload.is_online}
 
 
-@router.get("/drivers/nearby", response=NearbyDriversResponseSchema, auth=AuthBearer())
+@router.get("/drivers/nearby", response=NearbyDriversResponseSchema, auth=JWTAuth())
 def get_nearby_drivers(
     request,
     latitude: float = Query(..., ge=-90, le=90),
@@ -637,7 +637,7 @@ def get_nearby_drivers(
 # Statistics Endpoints
 # =============================================
 
-@router.get("/stats/deliveries", response=DeliveryStatsSchema, auth=AuthBearer())
+@router.get("/stats/deliveries", response=DeliveryStatsSchema, auth=JWTAuth())
 def get_delivery_stats(
     request,
     period: str = Query('today', pattern='^(today|week|month)$')
@@ -717,7 +717,7 @@ def get_delivery_stats(
     }
 
 
-@router.get("/stats/driver", response=DriverStatsSchema, auth=AuthBearer())
+@router.get("/stats/driver", response=DriverStatsSchema, auth=JWTAuth())
 def get_driver_stats(request):
     """إحصائيات السائق"""
     user = get_current_user(request)
