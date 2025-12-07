@@ -40,6 +40,7 @@ from .schemas import (
     NearbyStoreSchema,
     MessageSchema,
 )
+from apps.products.schemas import ProductListSchema
 
 router = Router()
 
@@ -163,7 +164,7 @@ def get_store(request, store_id: UUID):
     return store
 
 
-@router.get('/stores/{store_id}/products', tags=['المتاجر'])
+@router.get('/stores/{store_id}/products', response=List[ProductListSchema], tags=['المتاجر'])
 @paginate(LimitOffsetPagination)
 def store_products(
     request,
