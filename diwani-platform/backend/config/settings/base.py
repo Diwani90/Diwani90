@@ -224,12 +224,17 @@ LOCALE_PATHS = [
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Only include static directory if it exists and is different from STATIC_ROOT
+# STATICFILES_DIRS for development static files
+# In production, static files are collected to STATIC_ROOT
 _static_dir = BASE_DIR / 'static'
-if _static_dir.exists() and _static_dir != STATIC_ROOT:
-    STATICFILES_DIRS = [_static_dir]
-else:
-    STATICFILES_DIRS = []
+STATICFILES_DIRS = []
+if _static_dir.exists():
+    # Ensure we're not adding STATIC_ROOT to STATICFILES_DIRS
+    try:
+        if _static_dir.resolve() != STATIC_ROOT.resolve():
+            STATICFILES_DIRS = [_static_dir]
+    except (OSError, ValueError):
+        pass  # Skip if path resolution fails
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
