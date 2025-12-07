@@ -94,17 +94,23 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: 'LOAD_USER' });
   }, []);
 
-  const login = async (credentials) => {
+  const login = async (authData) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/auth/login', credentials);
+      // إذا كانت البيانات تحتوي على token مباشرة (من صفحة تسجيل الدخول الجديدة)
+      if (authData.access_token) {
+        dispatch({ type: 'LOGIN_SUCCESS', payload: authData });
+        return { success: true };
+      }
+      // للتوافق مع الطريقة القديمة (إذا احتجنا)
+      const response = await axios.post('/users/auth/login', authData);
       dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
       return { success: true };
     } catch (error) {
       dispatch({ type: 'SET_LOADING', payload: false });
-      return { 
-        success: false, 
-        error: error.response?.data?.detail || 'حدث خطأ في تسجيل الدخول' 
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'حدث خطأ في تسجيل الدخول'
       };
     }
   };
