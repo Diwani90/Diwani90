@@ -179,25 +179,137 @@ class OTPService:
         count = cache.get(key, 0)
         cache.set(key, count + 1, timeout=3600)  # ساعة
 
-    def _send_sms(self, phone_number: str, code: str, purpose: str):
+    def _send_sms(self, phone_number: str, code: str, purpose: str) -> bool:
         """
         إرسال SMS
 
-        في الإنتاج، استخدم مزود SMS مثل Unifonic أو Twilio
+        يدعم:
+        - Unifonic (المزود الافتراضي للسعودية)
+        - Twilio (بديل)
+        - وضع الاختبار (TEST_MODE)
         """
-        message = f'رمز التحقق الخاص بك في ديواني: {code}'
+        import requests
+        import logging
 
-        # TODO: تكامل مع مزود SMS
-        # مثال:
-        # sms_provider.send(
-        #     to=phone_number,
-        #     message=message,
-        #     sender='DIWANI'
-        # )
+        logger = logging.getLogger(__name__)
 
-        # للتطوير
-        if settings.DEBUG:
-            print(f'[OTP] {phone_number}: {code}')
+        # رسائل حسب الغرض
+        messages = {
+            'login': f'رمز تسجيل الدخول في ديواني: {code}\nصالح لمدة 10 دقائق',
+            'register': f'مرحباً بك في ديواني!\nرمز التحقق: {code}',
+            'reset_password': f'رمز إعادة تعيين كلمة المرور: {code}',
+            'verify_phone': f'رمز التحقق من رقم الهاتف: {code}',
+        }
+        message = messages.get(purpose, f'رمز التحقق: {code}')
+
+        # إعدادات SMS من settings
+        sms_config = getattr(settings, 'SMS_CONFIG', {})
+
+        # وضع الاختبار - يطبع في console ويحفظ في cache
+        test_mode = sms_config.get('TEST_MODE', settings.DEBUG)
+
+        if test_mode:
+            # حفظ الكود في cache للاختبار
+            cache.set(f'test_otp:{phone_number}', code, timeout=600)
+            logger.info(f'[SMS TEST MODE] To: {phone_number} | Code: {code} | Purpose: {purpose}')
+            print(f'╔══════════════════════════════════════╗')
+            print(f'║ 📱 SMS TEST MODE                     ║')
+            print(f'║ Phone: {phone_number:<25} ║')
+            print(f'║ Code:  {code:<25} ║')
+            print(f'║ Purpose: {purpose:<23} ║')
+            print(f'╚══════════════════════════════════════╝')
+            return True
+
+        # الإنتاج - إرسال فعلي
+        provider = sms_config.get('PROVIDER', 'unifonic')
+
+        try:
+            if provider == 'unifonic':
+                return self._send_via_unifonic(phone_number, message, sms_config)
+            elif provider == 'twilio':
+                return self._send_via_twilio(phone_number, message, sms_config)
+            else:
+                logger.error(f'Unknown SMS provider: {provider}')
+                return False
+
+        except Exception as e:
+            logger.error(f'SMS send failed: {e}')
+            # Fallback: حفظ في cache للتعافي
+            cache.set(f'sms_failed:{phone_number}', code, timeout=600)
+            return False
+
+    def _send_via_unifonic(self, phone: str, message: str, config: dict) -> bool:
+        """إرسال عبر Unifonic API"""
+        import requests
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        app_sid = config.get('UNIFONIC_APP_SID')
+        sender_id = config.get('UNIFONIC_SENDER_ID', 'DIWANI')
+
+        if not app_sid:
+            logger.error('UNIFONIC_APP_SID not configured')
+            return False
+
+        url = 'https://el.cloud.unifonic.com/rest/SMS/messages'
+
+        payload = {
+            'AppSid': app_sid,
+            'SenderID': sender_id,
+            'Recipient': phone.replace('+', ''),  # Unifonic لا يحتاج +
+            'Body': message,
+        }
+
+        try:
+            response = requests.post(url, data=payload, timeout=30)
+            result = response.json()
+
+            if result.get('success') == 'true' or response.status_code == 200:
+                logger.info(f'SMS sent via Unifonic to {phone}')
+                return True
+            else:
+                logger.error(f'Unifonic error: {result}')
+                return False
+
+        except requests.RequestException as e:
+            logger.error(f'Unifonic request failed: {e}')
+            return False
+
+    def _send_via_twilio(self, phone: str, message: str, config: dict) -> bool:
+        """إرسال عبر Twilio API"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        account_sid = config.get('TWILIO_ACCOUNT_SID')
+        auth_token = config.get('TWILIO_AUTH_TOKEN')
+        from_number = config.get('TWILIO_FROM_NUMBER')
+
+        if not all([account_sid, auth_token, from_number]):
+            logger.error('Twilio credentials not configured')
+            return False
+
+        try:
+            from twilio.rest import Client
+
+            client = Client(account_sid, auth_token)
+
+            sms = client.messages.create(
+                body=message,
+                from_=from_number,
+                to=phone
+            )
+
+            logger.info(f'SMS sent via Twilio to {phone}, SID: {sms.sid}')
+            return True
+
+        except ImportError:
+            logger.error('Twilio library not installed: pip install twilio')
+            return False
+        except Exception as e:
+            logger.error(f'Twilio error: {e}')
+            return False
 
 
 # =============================================

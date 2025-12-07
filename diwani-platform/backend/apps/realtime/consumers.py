@@ -194,14 +194,104 @@ class MainConsumer(BaseWebSocketConsumer):
 
         # قنوات الطلبات - التحقق من الملكية
         if channel.startswith('order_'):
-            # TODO: التحقق من أن المستخدم له علاقة بالطلب
-            return True
+            order_id = channel.replace('order_', '')
+            return await self._check_order_access(order_id)
 
         # قنوات التتبع
         if channel.startswith('tracking_'):
-            return True
+            delivery_id = channel.replace('tracking_', '')
+            return await self._check_tracking_access(delivery_id)
 
         return False
+
+    @database_sync_to_async
+    def _check_order_access(self, order_id: str) -> bool:
+        """
+        التحقق من صلاحية الوصول للطلب
+
+        المستخدمون المسموح لهم:
+        - صاحب الطلب (العميل)
+        - صاحب المتجر (التاجر)
+        - السائق المخصص للتوصيل
+        - مدير النظام
+        """
+        try:
+            from apps.orders.models import Order
+            from apps.stores.models import StoreStaff
+
+            order = Order.objects.select_related(
+                'customer', 'vendor', 'delivery'
+            ).get(id=order_id)
+
+            user_id = self.connection_info.user_id
+
+            # العميل صاحب الطلب
+            if order.customer_id == user_id:
+                return True
+
+            # صاحب المتجر
+            if hasattr(order.vendor, 'owner_id') and order.vendor.owner_id == user_id:
+                return True
+
+            # موظفي المتجر
+            if StoreStaff.objects.filter(
+                store=order.vendor,
+                user_id=user_id,
+                is_active=True
+            ).exists():
+                return True
+
+            # السائق المخصص
+            if order.delivery and order.delivery.driver_id == user_id:
+                return True
+
+            # مدير النظام
+            if hasattr(self.connection_info, 'is_staff') and self.connection_info.is_staff:
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"Order access check failed for {order_id}: {e}")
+            return False
+
+    @database_sync_to_async
+    def _check_tracking_access(self, delivery_id: str) -> bool:
+        """
+        التحقق من صلاحية تتبع التوصيل
+
+        المستخدمون المسموح لهم:
+        - صاحب الطلب
+        - السائق
+        - التاجر
+        """
+        try:
+            from apps.tracking.models import Delivery
+
+            delivery = Delivery.objects.select_related(
+                'order', 'order__customer', 'order__vendor', 'driver'
+            ).get(id=delivery_id)
+
+            user_id = self.connection_info.user_id
+
+            # صاحب الطلب
+            if delivery.order.customer_id == user_id:
+                return True
+
+            # السائق
+            if delivery.driver_id == user_id:
+                return True
+
+            # صاحب المتجر
+            if hasattr(delivery.order.vendor, 'owner_id'):
+                if delivery.order.vendor.owner_id == user_id:
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"Tracking access check failed for {delivery_id}: {e}")
+            return False
 
     def _detect_device_type(self) -> str:
         """اكتشاف نوع الجهاز"""
@@ -494,7 +584,14 @@ class TrackingConsumer(BaseWebSocketConsumer):
         if not delivery_id:
             return
 
-        # TODO: التحقق من صلاحية التتبع
+        # التحقق من صلاحية التتبع
+        if not await self._check_tracking_permission(delivery_id):
+            await self.send_json({
+                'type': 'error',
+                'code': 'tracking_denied',
+                'message': 'غير مصرح لك بتتبع هذا التوصيل',
+            })
+            return
 
         tracking = get_tracking_service()
         await tracking.subscribe_to_delivery(
@@ -538,10 +635,17 @@ class TrackingConsumer(BaseWebSocketConsumer):
         """تحديث موقع (من السائق)"""
         from apps.tracking.services import GeoPoint, LocationUpdate, get_tracking_service
 
-        # TODO: التحقق من أن المستخدم هو سائق
-
         delivery_id = content.get('delivery_id')
         if not delivery_id:
+            return
+
+        # التحقق من أن المستخدم هو السائق المخصص للتوصيل
+        if not await self._check_driver_permission(delivery_id):
+            await self.send_json({
+                'type': 'error',
+                'code': 'update_denied',
+                'message': 'أنت لست السائق المخصص لهذا التوصيل',
+            })
             return
 
         tracking = get_tracking_service()
@@ -588,3 +692,58 @@ class TrackingConsumer(BaseWebSocketConsumer):
     async def tracking_status_update(self, event: Dict[str, Any]):
         """استقبال تحديث حالة"""
         await self.send_json(event)
+
+    @database_sync_to_async
+    def _check_tracking_permission(self, delivery_id: str) -> bool:
+        """
+        التحقق من صلاحية تتبع التوصيل
+
+        المستخدمون المسموح لهم:
+        - صاحب الطلب
+        - السائق المخصص
+        - صاحب المتجر
+        """
+        try:
+            from apps.tracking.models import Delivery
+
+            delivery = Delivery.objects.select_related(
+                'order', 'order__customer', 'order__vendor', 'driver'
+            ).get(id=delivery_id)
+
+            user_id = self.connection_info.user_id
+
+            # صاحب الطلب
+            if delivery.order.customer_id == user_id:
+                return True
+
+            # السائق المخصص
+            if delivery.driver_id == user_id:
+                return True
+
+            # صاحب المتجر
+            if hasattr(delivery.order.vendor, 'owner_id'):
+                if delivery.order.vendor.owner_id == user_id:
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"Tracking permission check failed for {delivery_id}: {e}")
+            return False
+
+    @database_sync_to_async
+    def _check_driver_permission(self, delivery_id: str) -> bool:
+        """
+        التحقق من أن المستخدم هو السائق المخصص للتوصيل
+        """
+        try:
+            from apps.tracking.models import Delivery
+
+            delivery = Delivery.objects.get(id=delivery_id)
+
+            # فقط السائق المخصص يمكنه تحديث الموقع
+            return delivery.driver_id == self.connection_info.user_id
+
+        except Exception as e:
+            logger.warning(f"Driver permission check failed for {delivery_id}: {e}")
+            return False

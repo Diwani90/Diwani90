@@ -530,9 +530,135 @@ class OrderService:
         return Decimal(str(distance.km)).quantize(Decimal('0.01'))
 
     def _create_payment_session(self, order: Order) -> str:
-        """إنشاء جلسة دفع"""
-        # TODO: تكامل مع Tap Payment
-        return f'https://payment.diwani.sa/pay/{order.id}'
+        """
+        إنشاء جلسة دفع مع Tap Payment
+
+        يدعم:
+        - وضع الاختبار (TEST_MODE)
+        - وضع الإنتاج (LIVE_MODE)
+        """
+        import requests
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        tap_config = getattr(settings, 'TAP_PAYMENT_CONFIG', {})
+        test_mode = tap_config.get('TEST_MODE', settings.DEBUG)
+
+        # وضع الاختبار - رابط وهمي يعمل
+        if test_mode:
+            # إنشاء جلسة اختبار محلية
+            from django.core.cache import cache
+            import uuid
+
+            session_id = str(uuid.uuid4())
+            cache.set(
+                f'payment_session:{session_id}',
+                {
+                    'order_id': str(order.id),
+                    'amount': str(order.total_amount),
+                    'status': 'pending',
+                    'test_mode': True,
+                },
+                timeout=3600  # ساعة
+            )
+
+            # رابط الدفع الاختباري
+            base_url = tap_config.get('CALLBACK_BASE_URL', 'http://localhost:8000')
+            payment_url = f'{base_url}/api/payments/test/{session_id}/'
+
+            logger.info(f'[TAP TEST] Payment session created: {session_id} for order {order.id}')
+            print(f'╔══════════════════════════════════════════╗')
+            print(f'║ 💳 PAYMENT TEST MODE                     ║')
+            print(f'║ Order: {str(order.id)[:30]:<30} ║')
+            print(f'║ Amount: {order.total_amount:<30} SAR ║')
+            print(f'║ Session: {session_id[:28]:<28} ║')
+            print(f'╚══════════════════════════════════════════╝')
+
+            return payment_url
+
+        # الإنتاج - Tap Payment API
+        api_key = tap_config.get('SECRET_KEY')
+        if not api_key:
+            logger.error('TAP_PAYMENT_CONFIG.SECRET_KEY not configured')
+            raise ValueError('Payment gateway not configured')
+
+        # إعداد بيانات الدفع
+        callback_url = tap_config.get('CALLBACK_URL', 'https://api.diwani.sa/payments/callback/')
+        redirect_url = tap_config.get('REDIRECT_URL', 'https://diwani.sa/payment/result/')
+
+        payload = {
+            'amount': float(order.total_amount),
+            'currency': 'SAR',
+            'threeDSecure': True,
+            'save_card': False,
+            'description': f'طلب رقم {order.order_number or order.id}',
+            'statement_descriptor': 'DIWANI',
+            'metadata': {
+                'order_id': str(order.id),
+                'customer_id': str(order.customer_id),
+            },
+            'reference': {
+                'transaction': str(order.id),
+                'order': order.order_number or str(order.id),
+            },
+            'receipt': {
+                'email': True,
+                'sms': True,
+            },
+            'customer': {
+                'first_name': order.customer.first_name or 'عميل',
+                'last_name': order.customer.last_name or '',
+                'email': order.customer.email or '',
+                'phone': {
+                    'country_code': '966',
+                    'number': str(order.customer.phone_number).replace('+966', '').replace('+', ''),
+                },
+            },
+            'source': {
+                'id': 'src_all',  # يقبل جميع طرق الدفع
+            },
+            'redirect': {
+                'url': redirect_url,
+            },
+            'post': {
+                'url': callback_url,
+            },
+        }
+
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        }
+
+        try:
+            response = requests.post(
+                'https://api.tap.company/v2/charges',
+                json=payload,
+                headers=headers,
+                timeout=30,
+            )
+
+            result = response.json()
+
+            if response.status_code == 200 and 'transaction' in result:
+                payment_url = result.get('transaction', {}).get('url', '')
+                charge_id = result.get('id', '')
+
+                # حفظ معرف العملية
+                order.payment_reference = charge_id
+                order.save(update_fields=['payment_reference'])
+
+                logger.info(f'Tap payment session created: {charge_id} for order {order.id}')
+                return payment_url
+
+            else:
+                logger.error(f'Tap API error: {result}')
+                raise ValueError(f'Payment error: {result.get("message", "Unknown error")}')
+
+        except requests.RequestException as e:
+            logger.error(f'Tap API request failed: {e}')
+            raise ValueError(f'Payment service unavailable: {str(e)}')
 
     def _create_transaction(
         self,
@@ -558,21 +684,285 @@ class OrderService:
         amount: Decimal,
         user
     ):
-        """معالجة الاسترداد"""
-        OrderRefund.objects.create(
+        """
+        معالجة الاسترداد
+
+        يدعم:
+        - استرداد كامل أو جزئي
+        - وضع الاختبار
+        - Tap Payment Refund API
+        """
+        import requests
+        import logging
+        import uuid
+
+        logger = logging.getLogger(__name__)
+
+        # إنشاء سجل الاسترداد
+        refund = OrderRefund.objects.create(
             order=order,
             amount=amount,
-            status='approved',
+            status='pending',
             reason=CancellationReason.CUSTOMER_REQUEST,
             requested_by=user,
         )
 
-        # TODO: تكامل مع بوابة الدفع للاسترداد
+        tap_config = getattr(settings, 'TAP_PAYMENT_CONFIG', {})
+        test_mode = tap_config.get('TEST_MODE', settings.DEBUG)
+
+        # وضع الاختبار
+        if test_mode:
+            refund_id = f'test_refund_{uuid.uuid4().hex[:8]}'
+            refund.status = 'approved'
+            refund.transaction_id = refund_id
+            refund.processed_at = timezone.now()
+            refund.save()
+
+            # تحديث حالة الطلب
+            order.payment_status = PaymentStatus.REFUNDED
+            order.save(update_fields=['payment_status'])
+
+            logger.info(f'[REFUND TEST] Order {order.id} refunded: {amount} SAR')
+            print(f'╔══════════════════════════════════════════╗')
+            print(f'║ 💰 REFUND TEST MODE                      ║')
+            print(f'║ Order: {str(order.id)[:30]:<30} ║')
+            print(f'║ Amount: {amount:<30} SAR ║')
+            print(f'║ Refund ID: {refund_id:<27} ║')
+            print(f'╚══════════════════════════════════════════╝')
+            return refund
+
+        # الإنتاج - Tap Refund API
+        api_key = tap_config.get('SECRET_KEY')
+        charge_id = order.payment_reference
+
+        if not api_key:
+            logger.error('TAP_PAYMENT_CONFIG.SECRET_KEY not configured')
+            refund.status = 'failed'
+            refund.error_message = 'Payment gateway not configured'
+            refund.save()
+            return refund
+
+        if not charge_id:
+            logger.error(f'No charge_id for order {order.id}')
+            refund.status = 'failed'
+            refund.error_message = 'No payment reference found'
+            refund.save()
+            return refund
+
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        }
+
+        payload = {
+            'charge_id': charge_id,
+            'amount': float(amount),
+            'currency': 'SAR',
+            'reason': f'إلغاء طلب {order.order_number or order.id}',
+            'metadata': {
+                'order_id': str(order.id),
+                'refund_id': str(refund.id),
+            },
+        }
+
+        try:
+            response = requests.post(
+                'https://api.tap.company/v2/refunds',
+                json=payload,
+                headers=headers,
+                timeout=30,
+            )
+
+            result = response.json()
+
+            if response.status_code == 200 and result.get('status') in ['CAPTURED', 'pending']:
+                refund.status = 'approved'
+                refund.transaction_id = result.get('id', '')
+                refund.processed_at = timezone.now()
+                refund.save()
+
+                # تحديث حالة الطلب
+                if amount >= order.paid_amount:
+                    order.payment_status = PaymentStatus.REFUNDED
+                else:
+                    order.payment_status = PaymentStatus.PARTIALLY_REFUNDED
+                order.save(update_fields=['payment_status'])
+
+                logger.info(f'Tap refund successful: {result.get("id")} for order {order.id}')
+
+            else:
+                refund.status = 'failed'
+                refund.error_message = result.get('message', 'Refund failed')
+                refund.save()
+                logger.error(f'Tap refund failed: {result}')
+
+        except requests.RequestException as e:
+            refund.status = 'failed'
+            refund.error_message = str(e)
+            refund.save()
+            logger.error(f'Tap refund request failed: {e}')
+
+        return refund
 
     def _send_order_notifications(self, order: Order, event: str):
-        """إرسال إشعارات الطلب"""
-        # TODO: تكامل مع نظام الإشعارات
-        pass
+        """
+        إرسال إشعارات الطلب
+
+        يرسل إشعارات للعميل والتاجر حسب الحدث
+        """
+        import asyncio
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # قوالب الإشعارات
+        notification_templates = {
+            'confirmed': {
+                'customer': {
+                    'title': 'تم تأكيد طلبك ✅',
+                    'body': f'تم تأكيد طلبك رقم {order.order_number or order.id}. سيتم تجهيزه قريباً.',
+                },
+                'vendor': {
+                    'title': 'طلب جديد 🛒',
+                    'body': f'لديك طلب جديد رقم {order.order_number or order.id} بقيمة {order.total_amount} ر.س',
+                },
+            },
+            'accepted': {
+                'customer': {
+                    'title': 'تم قبول طلبك 👍',
+                    'body': f'قام التاجر بقبول طلبك رقم {order.order_number or order.id}. جاري التجهيز.',
+                },
+            },
+            'processing': {
+                'customer': {
+                    'title': 'جاري تجهيز طلبك 📦',
+                    'body': f'طلبك رقم {order.order_number or order.id} قيد التجهيز.',
+                },
+            },
+            'ready': {
+                'customer': {
+                    'title': 'طلبك جاهز للتسليم 📦',
+                    'body': f'طلبك رقم {order.order_number or order.id} جاهز وسيتم تسليمه قريباً.',
+                },
+            },
+            'shipped': {
+                'customer': {
+                    'title': 'طلبك في الطريق 🚚',
+                    'body': f'طلبك رقم {order.order_number or order.id} في الطريق إليك.',
+                },
+            },
+            'out_for_delivery': {
+                'customer': {
+                    'title': 'السائق في الطريق إليك 🚗',
+                    'body': f'السائق في طريقه لتسليم طلبك رقم {order.order_number or order.id}.',
+                },
+            },
+            'delivered': {
+                'customer': {
+                    'title': 'تم تسليم طلبك ✅',
+                    'body': f'تم تسليم طلبك رقم {order.order_number or order.id} بنجاح. شكراً لك!',
+                },
+                'vendor': {
+                    'title': 'تم تسليم الطلب ✅',
+                    'body': f'تم تسليم الطلب رقم {order.order_number or order.id} للعميل بنجاح.',
+                },
+            },
+            'cancelled': {
+                'customer': {
+                    'title': 'تم إلغاء طلبك ❌',
+                    'body': f'تم إلغاء طلبك رقم {order.order_number or order.id}. إذا تم الدفع سيتم إرجاع المبلغ.',
+                },
+                'vendor': {
+                    'title': 'تم إلغاء الطلب ❌',
+                    'body': f'تم إلغاء الطلب رقم {order.order_number or order.id}.',
+                },
+            },
+        }
+
+        templates = notification_templates.get(event, {})
+        if not templates:
+            logger.warning(f'No notification template for event: {event}')
+            return
+
+        # إرسال الإشعارات
+        try:
+            from apps.notifications.services import NotificationPayload, get_notification_service
+            from apps.notifications.models import DeliveryChannel, NotificationCategory
+
+            notification_service = get_notification_service()
+
+            # إشعار للعميل
+            if 'customer' in templates:
+                customer_notification = templates['customer']
+
+                async def send_customer_notification():
+                    payload = NotificationPayload(
+                        recipient_id=order.customer_id,
+                        title=customer_notification['title'],
+                        body=customer_notification['body'],
+                        category=NotificationCategory.ORDER,
+                        channels=[
+                            DeliveryChannel.WEBSOCKET,
+                            DeliveryChannel.PUSH,
+                        ],
+                        data={
+                            'order_id': str(order.id),
+                            'event': event,
+                            'order_number': order.order_number or str(order.id),
+                        },
+                        action_url=f'/orders/{order.id}',
+                    )
+                    await notification_service.send(payload)
+
+                # تشغيل async من sync context
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.create_task(send_customer_notification())
+                    else:
+                        loop.run_until_complete(send_customer_notification())
+                except RuntimeError:
+                    asyncio.run(send_customer_notification())
+
+            # إشعار للتاجر
+            if 'vendor' in templates:
+                vendor_notification = templates['vendor']
+                vendor_user_id = getattr(order.vendor, 'owner_id', None)
+
+                if vendor_user_id:
+                    async def send_vendor_notification():
+                        payload = NotificationPayload(
+                            recipient_id=vendor_user_id,
+                            title=vendor_notification['title'],
+                            body=vendor_notification['body'],
+                            category=NotificationCategory.ORDER,
+                            channels=[
+                                DeliveryChannel.WEBSOCKET,
+                                DeliveryChannel.PUSH,
+                            ],
+                            data={
+                                'order_id': str(order.id),
+                                'event': event,
+                            },
+                            action_url=f'/vendor/orders/{order.id}',
+                        )
+                        await notification_service.send(payload)
+
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(send_vendor_notification())
+                        else:
+                            loop.run_until_complete(send_vendor_notification())
+                    except RuntimeError:
+                        asyncio.run(send_vendor_notification())
+
+            logger.info(f'Order notifications sent for order {order.id}, event: {event}')
+
+        except ImportError as e:
+            logger.warning(f'Notifications module not available: {e}')
+        except Exception as e:
+            logger.error(f'Failed to send order notifications: {e}')
 
     def _get_valid_transitions(self, current_status: str) -> List[str]:
         """الحصول على التحويلات الصالحة للحالة"""

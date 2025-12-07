@@ -262,13 +262,35 @@ class PushNotificationProvider(DeliveryProvider):
         notification: Notification,
         token: str,
     ) -> DeliveryResult:
-        """إرسال عبر FCM"""
-        # TODO: تنفيذ FCM الفعلي
-        # هذا placeholder - يجب استبداله بـ firebase-admin
+        """
+        إرسال عبر Firebase Cloud Messaging (FCM)
+
+        يدعم:
+        - وضع الاختبار
+        - Firebase Admin SDK
+        """
+        import asyncio
 
         fcm_config = getattr(settings, 'FCM_CONFIG', {})
+        test_mode = fcm_config.get('TEST_MODE', settings.DEBUG)
 
-        if not fcm_config.get('enabled', False):
+        # وضع الاختبار
+        if test_mode:
+            logger.info(f"[FCM TEST] Token: {token[:20]}... | Title: {notification.title}")
+            print(f'╔══════════════════════════════════════════╗')
+            print(f'║ 🔔 FCM TEST MODE (Android/Web)           ║')
+            print(f'║ Token: {token[:30]:<30}... ║')
+            print(f'║ Title: {notification.title[:30]:<30} ║')
+            print(f'╚══════════════════════════════════════════╝')
+
+            return DeliveryResult(
+                channel=self.channel,
+                success=True,
+                message_id=f"fcm_test_{notification.id}",
+            )
+
+        # التحقق من التفعيل
+        if not fcm_config.get('ENABLED', False):
             return DeliveryResult(
                 channel=self.channel,
                 success=False,
@@ -276,26 +298,116 @@ class PushNotificationProvider(DeliveryProvider):
                 error_code="fcm_disabled",
             )
 
-        # Simulate FCM send
-        logger.info(f"FCM: Sending to {token[:20]}... - {notification.title}")
+        # الإنتاج - Firebase Admin SDK
+        try:
+            import firebase_admin
+            from firebase_admin import credentials, messaging
 
-        return DeliveryResult(
-            channel=self.channel,
-            success=True,
-            message_id=f"fcm_{notification.id}",
-        )
+            # تهيئة Firebase إذا لم تكن مهيأة
+            if not firebase_admin._apps:
+                cred_path = fcm_config.get('CREDENTIALS_FILE')
+                if cred_path:
+                    cred = credentials.Certificate(cred_path)
+                    firebase_admin.initialize_app(cred)
+                else:
+                    logger.error('FCM_CONFIG.CREDENTIALS_FILE not configured')
+                    return DeliveryResult(
+                        channel=self.channel,
+                        success=False,
+                        error_message="Firebase credentials not configured",
+                        error_code="fcm_no_credentials",
+                    )
+
+            # إنشاء الرسالة
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=notification.title,
+                    body=notification.body,
+                    image=notification.image_url or None,
+                ),
+                data={
+                    'notification_id': str(notification.id),
+                    'category': notification.category,
+                    'action_url': notification.action_url or '',
+                    **{k: str(v) for k, v in (notification.data or {}).items()},
+                },
+                token=token,
+                android=messaging.AndroidConfig(
+                    priority='high',
+                    notification=messaging.AndroidNotification(
+                        icon=notification.icon or 'ic_notification',
+                        color='#0EA5E9',
+                        sound='default',
+                    ),
+                ),
+                webpush=messaging.WebpushConfig(
+                    notification=messaging.WebpushNotification(
+                        icon=notification.icon or '/icons/notification.png',
+                    ),
+                ),
+            )
+
+            # إرسال بشكل async
+            response = await asyncio.to_thread(messaging.send, message)
+
+            logger.info(f"FCM sent successfully: {response}")
+            return DeliveryResult(
+                channel=self.channel,
+                success=True,
+                message_id=response,
+            )
+
+        except ImportError:
+            logger.error('firebase-admin not installed: pip install firebase-admin')
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message="Firebase Admin SDK not installed",
+                error_code="fcm_not_installed",
+            )
+        except Exception as e:
+            logger.error(f"FCM error: {e}")
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message=str(e),
+                error_code="fcm_error",
+            )
 
     async def _send_apns(
         self,
         notification: Notification,
         token: str,
     ) -> DeliveryResult:
-        """إرسال عبر APNS"""
-        # TODO: تنفيذ APNS الفعلي
+        """
+        إرسال عبر Apple Push Notification Service (APNS)
+
+        يدعم:
+        - وضع الاختبار
+        - PyAPNs2 library
+        """
+        import asyncio
 
         apns_config = getattr(settings, 'APNS_CONFIG', {})
+        test_mode = apns_config.get('TEST_MODE', settings.DEBUG)
 
-        if not apns_config.get('enabled', False):
+        # وضع الاختبار
+        if test_mode:
+            logger.info(f"[APNS TEST] Token: {token[:20]}... | Title: {notification.title}")
+            print(f'╔══════════════════════════════════════════╗')
+            print(f'║ 🍎 APNS TEST MODE (iOS)                  ║')
+            print(f'║ Token: {token[:30]:<30}... ║')
+            print(f'║ Title: {notification.title[:30]:<30} ║')
+            print(f'╚══════════════════════════════════════════╝')
+
+            return DeliveryResult(
+                channel=self.channel,
+                success=True,
+                message_id=f"apns_test_{notification.id}",
+            )
+
+        # التحقق من التفعيل
+        if not apns_config.get('ENABLED', False):
             return DeliveryResult(
                 channel=self.channel,
                 success=False,
@@ -303,13 +415,94 @@ class PushNotificationProvider(DeliveryProvider):
                 error_code="apns_disabled",
             )
 
-        logger.info(f"APNS: Sending to {token[:20]}... - {notification.title}")
+        # الإنتاج - PyAPNs2
+        try:
+            from apns2.client import APNsClient, NotificationPriority
+            from apns2.payload import Payload, PayloadAlert
 
-        return DeliveryResult(
-            channel=self.channel,
-            success=True,
-            message_id=f"apns_{notification.id}",
-        )
+            key_file = apns_config.get('KEY_FILE')
+            team_id = apns_config.get('TEAM_ID')
+            key_id = apns_config.get('KEY_ID')
+            bundle_id = apns_config.get('BUNDLE_ID')
+            use_sandbox = apns_config.get('USE_SANDBOX', False)
+
+            if not all([key_file, team_id, key_id, bundle_id]):
+                logger.error('APNS configuration incomplete')
+                return DeliveryResult(
+                    channel=self.channel,
+                    success=False,
+                    error_message="APNS configuration incomplete",
+                    error_code="apns_no_config",
+                )
+
+            # إنشاء العميل
+            client = APNsClient(
+                credentials=key_file,
+                use_sandbox=use_sandbox,
+                use_alternative_port=False,
+            )
+
+            # إنشاء الحمولة
+            alert = PayloadAlert(
+                title=notification.title,
+                body=notification.body,
+            )
+
+            payload = Payload(
+                alert=alert,
+                sound='default',
+                badge=1,
+                category=notification.category,
+                custom={
+                    'notification_id': str(notification.id),
+                    'action_url': notification.action_url or '',
+                    **(notification.data or {}),
+                },
+            )
+
+            # إرسال
+            def send_notification():
+                return client.send_notification(
+                    token,
+                    payload,
+                    topic=bundle_id,
+                    priority=NotificationPriority.Immediate,
+                )
+
+            result = await asyncio.to_thread(send_notification)
+
+            if result.is_successful:
+                logger.info(f"APNS sent successfully to {token[:20]}...")
+                return DeliveryResult(
+                    channel=self.channel,
+                    success=True,
+                    message_id=f"apns_{notification.id}",
+                )
+            else:
+                logger.error(f"APNS failed: {result.description}")
+                return DeliveryResult(
+                    channel=self.channel,
+                    success=False,
+                    error_message=result.description or "APNS send failed",
+                    error_code="apns_failed",
+                )
+
+        except ImportError:
+            logger.error('apns2 not installed: pip install apns2')
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message="PyAPNs2 not installed",
+                error_code="apns_not_installed",
+            )
+        except Exception as e:
+            logger.error(f"APNS error: {e}")
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message=str(e),
+                error_code="apns_error",
+            )
 
 
 class SMSProvider(DeliveryProvider):
@@ -354,10 +547,37 @@ class SMSProvider(DeliveryProvider):
             )
 
     async def _send_sms(self, phone: str, message: str) -> DeliveryResult:
-        """إرسال SMS عبر المزود"""
-        sms_config = getattr(settings, 'SMS_CONFIG', {})
+        """
+        إرسال SMS عبر المزود
 
-        if not sms_config.get('enabled', False):
+        يدعم:
+        - Unifonic (للسعودية)
+        - Twilio (عالمي)
+        - وضع الاختبار
+        """
+        import asyncio
+        import requests
+
+        sms_config = getattr(settings, 'SMS_CONFIG', {})
+        test_mode = sms_config.get('TEST_MODE', settings.DEBUG)
+
+        # وضع الاختبار
+        if test_mode:
+            logger.info(f"[SMS TEST] To: {phone} | Message: {message[:50]}...")
+            print(f'╔══════════════════════════════════════════╗')
+            print(f'║ 📱 SMS NOTIFICATION TEST MODE            ║')
+            print(f'║ Phone: {phone:<33} ║')
+            print(f'║ Message: {message[:30]:<30}... ║')
+            print(f'╚══════════════════════════════════════════╝')
+
+            return DeliveryResult(
+                channel=self.channel,
+                success=True,
+                message_id=f"sms_test_{phone}",
+            )
+
+        # التحقق من التفعيل
+        if not sms_config.get('ENABLED', False):
             return DeliveryResult(
                 channel=self.channel,
                 success=False,
@@ -365,14 +585,131 @@ class SMSProvider(DeliveryProvider):
                 error_code="sms_disabled",
             )
 
-        # TODO: تنفيذ SMS الفعلي (Twilio, Unifonic, etc.)
-        logger.info(f"SMS: Sending to {phone} - {message[:50]}...")
+        provider = sms_config.get('PROVIDER', 'unifonic')
 
-        return DeliveryResult(
-            channel=self.channel,
-            success=True,
-            message_id=f"sms_{phone}",
-        )
+        try:
+            if provider == 'unifonic':
+                return await self._send_sms_unifonic(phone, message, sms_config)
+            elif provider == 'twilio':
+                return await self._send_sms_twilio(phone, message, sms_config)
+            else:
+                logger.error(f'Unknown SMS provider: {provider}')
+                return DeliveryResult(
+                    channel=self.channel,
+                    success=False,
+                    error_message=f"Unknown provider: {provider}",
+                    error_code="sms_unknown_provider",
+                )
+
+        except Exception as e:
+            logger.error(f"SMS error: {e}")
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message=str(e),
+                error_code="sms_error",
+            )
+
+    async def _send_sms_unifonic(self, phone: str, message: str, config: dict) -> DeliveryResult:
+        """إرسال عبر Unifonic"""
+        import asyncio
+        import requests
+
+        app_sid = config.get('UNIFONIC_APP_SID')
+        sender_id = config.get('UNIFONIC_SENDER_ID', 'DIWANI')
+
+        if not app_sid:
+            logger.error('UNIFONIC_APP_SID not configured')
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message="Unifonic credentials not configured",
+                error_code="sms_no_credentials",
+            )
+
+        url = 'https://el.cloud.unifonic.com/rest/SMS/messages'
+        payload = {
+            'AppSid': app_sid,
+            'SenderID': sender_id,
+            'Recipient': phone.replace('+', ''),
+            'Body': message,
+        }
+
+        def send_request():
+            return requests.post(url, data=payload, timeout=30)
+
+        response = await asyncio.to_thread(send_request)
+        result = response.json()
+
+        if result.get('success') == 'true' or response.status_code == 200:
+            logger.info(f"SMS sent via Unifonic to {phone}")
+            return DeliveryResult(
+                channel=self.channel,
+                success=True,
+                message_id=result.get('MessageID', f"unifonic_{phone}"),
+            )
+        else:
+            logger.error(f"Unifonic error: {result}")
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message=result.get('message', 'Unifonic error'),
+                error_code="unifonic_error",
+            )
+
+    async def _send_sms_twilio(self, phone: str, message: str, config: dict) -> DeliveryResult:
+        """إرسال عبر Twilio"""
+        import asyncio
+
+        account_sid = config.get('TWILIO_ACCOUNT_SID')
+        auth_token = config.get('TWILIO_AUTH_TOKEN')
+        from_number = config.get('TWILIO_FROM_NUMBER')
+
+        if not all([account_sid, auth_token, from_number]):
+            logger.error('Twilio credentials not configured')
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message="Twilio credentials not configured",
+                error_code="sms_no_credentials",
+            )
+
+        try:
+            from twilio.rest import Client
+
+            def send_sms():
+                client = Client(account_sid, auth_token)
+                return client.messages.create(
+                    body=message,
+                    from_=from_number,
+                    to=phone
+                )
+
+            sms = await asyncio.to_thread(send_sms)
+            logger.info(f"SMS sent via Twilio to {phone}, SID: {sms.sid}")
+
+            return DeliveryResult(
+                channel=self.channel,
+                success=True,
+                message_id=sms.sid,
+            )
+
+        except ImportError:
+            logger.error('twilio not installed: pip install twilio')
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message="Twilio library not installed",
+                error_code="twilio_not_installed",
+            )
+        except Exception as e:
+            logger.error(f"Twilio error: {e}")
+            return DeliveryResult(
+                channel=self.channel,
+                success=False,
+                error_message=str(e),
+                error_code="twilio_error",
+            )
 
 
 class EmailProvider(DeliveryProvider):

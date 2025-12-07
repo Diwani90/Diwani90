@@ -67,12 +67,45 @@ class EncryptionService:
         self._master_key = self._get_master_key()
 
     def _get_master_key(self) -> bytes:
-        """الحصول على المفتاح الرئيسي"""
+        """
+        الحصول على المفتاح الرئيسي للتشفير
+
+        تحذير: في وضع الاختبار يتم إنشاء مفتاح ثابت للجلسة فقط.
+        في الإنتاج يجب ضبط CHAT_ENCRYPTION_KEY في متغيرات البيئة.
+        """
+        import hashlib
+        import warnings
+
         key = getattr(settings, 'CHAT_ENCRYPTION_KEY', None)
         if key:
             return base64.urlsafe_b64decode(key)
-        # إنشاء مفتاح مؤقت (للتطوير فقط)
-        return Fernet.generate_key()
+
+        # وضع الاختبار/التطوير
+        if settings.DEBUG:
+            # إنشاء مفتاح ثابت بناءً على SECRET_KEY
+            # هذا يضمن نفس المفتاح عبر إعادة التشغيل في التطوير
+            secret = getattr(settings, 'SECRET_KEY', 'diwani-dev-key')
+            derived_key = hashlib.sha256(secret.encode()).digest()
+
+            warnings.warn(
+                '⚠️ CHAT_ENCRYPTION_KEY not set! Using derived key from SECRET_KEY. '
+                'This is ONLY acceptable in development. '
+                'Set CHAT_ENCRYPTION_KEY in production!',
+                RuntimeWarning
+            )
+
+            print('╔══════════════════════════════════════════════════════════╗')
+            print('║ ⚠️  WARNING: Chat encryption using derived key           ║')
+            print('║     Set CHAT_ENCRYPTION_KEY in production!              ║')
+            print('╚══════════════════════════════════════════════════════════╝')
+
+            return base64.urlsafe_b64encode(derived_key)
+
+        # الإنتاج بدون مفتاح - خطأ فادح
+        raise ValueError(
+            'CHAT_ENCRYPTION_KEY must be set in production! '
+            'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+        )
 
     def generate_conversation_key(self) -> Tuple[str, bytes]:
         """إنشاء مفتاح محادثة جديد"""
@@ -207,6 +240,47 @@ class ChatService:
             redis_url = getattr(settings, 'REDIS_URL', 'redis://localhost:6379/0')
             self._redis = await aioredis.from_url(redis_url)
         return self._redis
+
+    async def _get_or_create_conversation_key(self, conversation: Conversation) -> bytes:
+        """
+        الحصول على مفتاح التشفير للمحادثة أو إنشاء واحد جديد
+
+        المفاتيح تُخزن في Redis مع تشفير بالمفتاح الرئيسي
+        """
+        redis = await self._get_redis()
+        key_cache_key = f'chat:conv_key:{conversation.id}'
+
+        # محاولة استرجاع المفتاح المخزن
+        encrypted_key = await redis.get(key_cache_key)
+
+        if encrypted_key:
+            # فك تشفير المفتاح المحفوظ
+            try:
+                fernet = Fernet(self._encryption._master_key)
+                return fernet.decrypt(encrypted_key)
+            except Exception:
+                # المفتاح تالف أو المفتاح الرئيسي تغير
+                pass
+
+        # إنشاء مفتاح جديد
+        key_id, new_key = self._encryption.generate_conversation_key()
+
+        # تشفير وحفظ المفتاح
+        fernet = Fernet(self._encryption._master_key)
+        encrypted_new_key = fernet.encrypt(new_key)
+
+        await redis.set(
+            key_cache_key,
+            encrypted_new_key,
+            ex=86400 * 365,  # سنة واحدة
+        )
+
+        # حفظ معرف المفتاح في المحادثة
+        conversation.metadata = conversation.metadata or {}
+        conversation.metadata['encryption_key_id'] = key_id
+        await conversation.asave(update_fields=['metadata'])
+
+        return new_key
 
     # =========================================================================
     # Conversation Management
@@ -467,9 +541,9 @@ class ChatService:
         # تشفير المحتوى إذا كانت المحادثة مشفرة
         content_encrypted = None
         if conversation.is_encrypted and payload.content:
-            # TODO: استخدام مفتاح المحادثة الفعلي
-            key_id, key = self._encryption.generate_conversation_key()
-            content_encrypted, _ = self._encryption.encrypt_message(payload.content, key)
+            # استخدام مفتاح المحادثة المحفوظ أو إنشاء جديد
+            conversation_key = await self._get_or_create_conversation_key(conversation)
+            content_encrypted, _ = self._encryption.encrypt_message(payload.content, conversation_key)
 
         # إنشاء الرسالة
         message = await Message.objects.acreate(
@@ -579,8 +653,17 @@ class ChatService:
         # فك التشفير إذا لزم الأمر
         content = message.content
         if message.content_encrypted:
-            # TODO: استخدام المفتاح الفعلي
-            content = "[رسالة مشفرة]"
+            try:
+                # الحصول على مفتاح المحادثة
+                conversation = await Conversation.objects.aget(id=message.conversation_id)
+                conversation_key = await self._get_or_create_conversation_key(conversation)
+                content = self._encryption.decrypt_message(
+                    message.content_encrypted,
+                    conversation_key
+                )
+            except Exception as e:
+                logger.warning(f"Failed to decrypt message {message.id}: {e}")
+                content = "[رسالة مشفرة - تعذر فك التشفير]"
 
         # الحصول على ردود الفعل
         reactions = {}
