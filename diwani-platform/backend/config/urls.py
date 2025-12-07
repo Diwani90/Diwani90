@@ -87,6 +87,10 @@ api.add_router('/search', search_router, tags=['البحث'])
 from apps.tracking.api import router as tracking_router
 api.add_router('/tracking', tracking_router, tags=['التتبع'])
 
+# Chat API - المحادثات
+from apps.chat.api import router as chat_router
+api.add_router('/chat', chat_router, tags=['المحادثات'])
+
 # ===================================
 # URL Patterns
 # ===================================
