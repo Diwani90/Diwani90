@@ -340,7 +340,7 @@ class SearchIndexManager:
     @staticmethod
     def reindex_all_vendors():
         """إعادة فهرسة جميع الموردين"""
-        from apps.accounts.models import VendorProfile
+        from apps.users.models import VendorProfile
 
         vendors = VendorProfile.objects.filter(is_verified=True)
         for vendor in vendors.iterator(chunk_size=100):
