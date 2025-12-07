@@ -83,6 +83,10 @@ api.add_router('/finance', finance_router, tags=['المالية'])
 from apps.search.api import router as search_router
 api.add_router('/search', search_router, tags=['البحث'])
 
+# Tracking API - التتبع والتوصيل
+from apps.tracking.api import router as tracking_router
+api.add_router('/tracking', tracking_router, tags=['التتبع'])
+
 # ===================================
 # URL Patterns
 # ===================================

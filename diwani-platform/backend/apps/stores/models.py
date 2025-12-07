@@ -499,3 +499,178 @@ class StoreServiceArea(models.Model):
 
     def __str__(self):
         return f"{self.store.name} - {self.name}"
+
+
+# =============================================
+# Store Staff
+# =============================================
+
+class StaffRole(models.TextChoices):
+    """أدوار الموظفين"""
+    OWNER = 'owner', _('المالك')
+    MANAGER = 'manager', _('مدير')
+    SUPERVISOR = 'supervisor', _('مشرف')
+    SALES = 'sales', _('مبيعات')
+    SUPPORT = 'support', _('دعم')
+    DRIVER = 'driver', _('سائق')
+    WAREHOUSE = 'warehouse', _('مستودع')
+
+
+class StoreStaff(models.Model):
+    """
+    موظفو المتجر
+
+    يربط المستخدمين بالمتاجر مع صلاحيات محددة
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    store = models.ForeignKey(
+        Store,
+        on_delete=models.CASCADE,
+        related_name='staff',
+        verbose_name=_('المتجر')
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='store_memberships',
+        verbose_name=_('المستخدم')
+    )
+
+    # الدور
+    role = models.CharField(
+        _('الدور'),
+        max_length=20,
+        choices=StaffRole.choices,
+        default=StaffRole.SALES
+    )
+
+    # الاسم الوظيفي (اختياري)
+    job_title = models.CharField(
+        _('المسمى الوظيفي'),
+        max_length=100,
+        blank=True
+    )
+
+    # الصلاحيات
+    permissions = models.JSONField(
+        _('الصلاحيات'),
+        default=dict,
+        blank=True,
+        help_text=_('{"can_edit_products": true, "can_manage_orders": true, ...}')
+    )
+
+    # الحالة
+    is_active = models.BooleanField(_('نشط'), default=True)
+    is_primary = models.BooleanField(
+        _('الموظف الرئيسي'),
+        default=False,
+        help_text=_('يستلم الإشعارات الرئيسية')
+    )
+
+    # الإحصائيات
+    orders_handled = models.PositiveIntegerField(
+        _('الطلبات المعالجة'),
+        default=0
+    )
+    rating = models.DecimalField(
+        _('التقييم'),
+        max_digits=3,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(5)]
+    )
+
+    # الوقت
+    shift_start = models.TimeField(_('بداية الوردية'), null=True, blank=True)
+    shift_end = models.TimeField(_('نهاية الوردية'), null=True, blank=True)
+    working_days = models.JSONField(
+        _('أيام العمل'),
+        default=list,
+        blank=True,
+        help_text=_('["saturday", "sunday", ...]')
+    )
+
+    # ملاحظات
+    notes = models.TextField(_('ملاحظات'), blank=True)
+
+    # التواريخ
+    joined_at = models.DateTimeField(_('تاريخ الانضمام'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('تاريخ التحديث'), auto_now=True)
+
+    class Meta:
+        verbose_name = _('موظف متجر')
+        verbose_name_plural = _('موظفو المتاجر')
+        ordering = ['role', 'joined_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['store', 'user'],
+                name='unique_store_staff'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['store', 'is_active']),
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['role']),
+        ]
+
+    def __str__(self):
+        return f"{self.user} - {self.store.name} ({self.get_role_display()})"
+
+    def has_permission(self, permission: str) -> bool:
+        """التحقق من صلاحية معينة"""
+        # المالك لديه كل الصلاحيات
+        if self.role == StaffRole.OWNER:
+            return True
+
+        # المدير لديه معظم الصلاحيات
+        if self.role == StaffRole.MANAGER:
+            restricted = ['delete_store', 'transfer_ownership']
+            return permission not in restricted
+
+        # التحقق من الصلاحيات المخصصة
+        return self.permissions.get(permission, False)
+
+    @property
+    def is_manager_or_above(self) -> bool:
+        """هل هو مدير أو أعلى؟"""
+        return self.role in [StaffRole.OWNER, StaffRole.MANAGER]
+
+    def get_default_permissions(self) -> dict:
+        """الحصول على الصلاحيات الافتراضية حسب الدور"""
+        permissions_map = {
+            StaffRole.OWNER: {
+                'all': True,
+            },
+            StaffRole.MANAGER: {
+                'manage_products': True,
+                'manage_orders': True,
+                'manage_staff': True,
+                'view_reports': True,
+                'manage_settings': True,
+            },
+            StaffRole.SUPERVISOR: {
+                'manage_products': True,
+                'manage_orders': True,
+                'view_reports': True,
+            },
+            StaffRole.SALES: {
+                'view_products': True,
+                'manage_orders': True,
+            },
+            StaffRole.SUPPORT: {
+                'view_orders': True,
+                'manage_chat': True,
+            },
+            StaffRole.DRIVER: {
+                'view_orders': True,
+                'update_delivery': True,
+            },
+            StaffRole.WAREHOUSE: {
+                'manage_inventory': True,
+                'view_orders': True,
+            },
+        }
+        return permissions_map.get(self.role, {})

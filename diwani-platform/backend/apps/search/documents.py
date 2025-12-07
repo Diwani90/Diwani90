@@ -336,36 +336,36 @@ class ProductDocument(Document):
             doc.has_discount = False
 
         # المخزون
-        doc.stock = product.stock
-        doc.in_stock = product.stock > 0
-        if product.stock == 0:
+        doc.stock = int(product.stock_quantity)
+        doc.in_stock = product.stock_quantity > 0
+        if product.stock_quantity == 0:
             doc.stock_status = 'out_of_stock'
-        elif product.stock < 10:
+        elif product.stock_quantity < 10:
             doc.stock_status = 'low_stock'
         else:
             doc.stock_status = 'in_stock'
 
-        # المتجر
-        if product.store:
+        # المتجر (vendor في نموذج Product يشير لـ Store)
+        if product.vendor:
             doc.store = {
-                'id': product.store.id,
-                'name': product.store.name,
-                'slug': product.store.slug,
-                'logo': product.store.logo.url if product.store.logo else None,
-                'rating': float(product.store.rating or 0),
-                'is_verified': getattr(product.store, 'is_verified', False)
+                'id': product.vendor.id,
+                'name': product.vendor.name,
+                'slug': product.vendor.slug,
+                'logo': product.vendor.logo.url if product.vendor.logo else None,
+                'rating': float(product.vendor.rating or 0),
+                'is_verified': getattr(product.vendor, 'is_verified', False)
             }
 
             # الموقع من المتجر
-            if hasattr(product.store, 'location') and product.store.location:
+            if hasattr(product.vendor, 'location') and product.vendor.location:
                 doc.location = {
-                    'city': getattr(product.store, 'city', ''),
-                    'district': getattr(product.store, 'district', ''),
-                    'region': getattr(product.store, 'region', ''),
+                    'city': getattr(product.vendor, 'city', ''),
+                    'district': getattr(product.vendor, 'district', ''),
+                    'region': getattr(product.vendor, 'region', ''),
                     'coordinates': {
-                        'lat': product.store.location.y,
-                        'lon': product.store.location.x
-                    } if product.store.location else None
+                        'lat': product.vendor.location.y,
+                        'lon': product.vendor.location.x
+                    } if product.vendor.location else None
                 }
 
         # الصور
@@ -462,7 +462,7 @@ class ProductDocument(Document):
             'weight': int(doc.popularity_score),
             'contexts': {
                 'category': [product.category.slug] if product.category else [],
-                'store': [product.store.slug] if product.store else [],
+                'store': [product.vendor.slug] if product.vendor else [],
             }
         }
 
