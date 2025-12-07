@@ -45,10 +45,17 @@ const Navigation = () => {
     { name: 'المحادثات', href: '/chat', icon: ChatBubbleLeftRightIcon },
   ];
 
+  const driverItems = [
+    { name: 'لوحة التحكم', href: '/driver/dashboard', icon: Cog6ToothIcon },
+    { name: 'سجل التوصيلات', href: '/driver/history', icon: ClipboardDocumentListIcon },
+    { name: 'المحادثات', href: '/chat', icon: ChatBubbleLeftRightIcon },
+  ];
+
   const getUserSpecificItems = () => {
     if (!isAuthenticated) return [];
     if (user?.role === 'customer') return customerItems;
-    if (user?.role === 'supplier') return supplierItems;
+    if (user?.role === 'supplier' || user?.role === 'vendor') return supplierItems;
+    if (user?.role === 'driver') return driverItems;
     return [];
   };
 

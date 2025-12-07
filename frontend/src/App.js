@@ -10,6 +10,7 @@ import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import CustomerDashboard from './components/customer/CustomerDashboard';
 import SupplierDashboard from './components/supplier/SupplierDashboard';
+import DriverDashboard from './components/driver/DriverDashboard';
 import ProductCatalog from './components/product/ProductCatalog';
 import ProductDetail from './components/product/ProductDetail';
 import CartPage from './components/cart/CartPage';
@@ -227,7 +228,24 @@ function App() {
                       <SupplierDashboard />
                     </ProtectedRoute>
                   } />
-                  
+
+                  {/* Driver Routes */}
+                  <Route path="/driver/dashboard" element={
+                    <ProtectedRoute allowedRoles={['driver']}>
+                      <DriverDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/driver/history" element={
+                    <ProtectedRoute allowedRoles={['driver']}>
+                      <DriverDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/driver/earnings" element={
+                    <ProtectedRoute allowedRoles={['driver']}>
+                      <DriverDashboard />
+                    </ProtectedRoute>
+                  } />
+
                   {/* Chat */}
                   <Route path="/chat" element={
                     <ProtectedRoute>
@@ -259,11 +277,13 @@ function App() {
 // Component to redirect to appropriate dashboard
 const DashboardRedirect = () => {
   const { user } = useAuth();
-  
+
   if (user.role === 'customer') {
     return <Navigate to="/customer/dashboard" replace />;
-  } else if (user.role === 'supplier') {
+  } else if (user.role === 'supplier' || user.role === 'vendor') {
     return <Navigate to="/supplier/dashboard" replace />;
+  } else if (user.role === 'driver') {
+    return <Navigate to="/driver/dashboard" replace />;
   } else {
     return <Navigate to="/" replace />;
   }
