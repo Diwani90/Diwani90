@@ -222,19 +222,13 @@ LOCALE_PATHS = [
 # Static & Media Files
 # ===================================
 STATIC_URL = '/static/'
+
+# Where collectstatic puts all static files (must NOT be in STATICFILES_DIRS)
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# STATICFILES_DIRS for development static files
-# In production, static files are collected to STATIC_ROOT
-_static_dir = BASE_DIR / 'static'
-STATICFILES_DIRS = []
-if _static_dir.exists():
-    # Ensure we're not adding STATIC_ROOT to STATICFILES_DIRS
-    try:
-        if _static_dir.resolve() != STATIC_ROOT.resolve():
-            STATICFILES_DIRS = [_static_dir]
-    except (OSError, ValueError):
-        pass  # Skip if path resolution fails
+# Source directories for static files (before collection)
+# Note: STATIC_ROOT (staticfiles) != static directory, so no conflict
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
