@@ -220,6 +220,29 @@ class FinancialReportSchema(Schema):
 
 
 # =============================================
+# سجل القيود المحاسبية
+# =============================================
+
+class LedgerEntrySchema(Schema):
+    """سجل القيد المحاسبي"""
+    id: UUID
+    entry_type: str
+    amount: Decimal
+    currency: str
+    from_account: str
+    to_account: str
+    reference_type: str
+    reference_id: str
+    description: Optional[str] = None
+    source: str
+    transaction_date: datetime
+    recorded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# =============================================
 # عام
 # =============================================
 

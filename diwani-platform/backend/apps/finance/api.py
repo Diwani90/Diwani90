@@ -36,6 +36,7 @@ from .schemas import (
     FinancialReportSchema,
     PriceCalculationRequestSchema,
     PriceCalculationResponseSchema,
+    LedgerEntrySchema,
     MessageSchema,
 )
 from .services import pricing_service, commission_service
@@ -167,7 +168,7 @@ def get_balance(request):
     return balance
 
 
-@router.get('/balance/history', tags=['الأرصدة'])
+@router.get('/balance/history', response=List[LedgerEntrySchema], tags=['الأرصدة'])
 @paginate(LimitOffsetPagination)
 def balance_history(
     request,
