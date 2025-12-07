@@ -90,7 +90,7 @@ class Delivery(models.Model):
     order = models.OneToOneField(
         'orders.Order',
         on_delete=models.CASCADE,
-        related_name='delivery',
+        related_name='tracking_delivery',
         verbose_name=_('الطلب')
     )
 
@@ -100,7 +100,7 @@ class Delivery(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='deliveries',
+        related_name='tracking_deliveries',
         verbose_name=_('السائق')
     )
 

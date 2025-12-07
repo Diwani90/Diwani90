@@ -6,7 +6,6 @@
 from decimal import Decimal
 
 from django.contrib import admin
-from django.db.models import Sum
 from django.utils.html import format_html
 from django.utils import timezone
 
@@ -32,17 +31,17 @@ class LedgerEntryAdmin(admin.ModelAdmin):
     """إدارة السجل المالي - للقراءة فقط"""
 
     list_display = [
-        'id', 'transaction_type', 'amount_display', 'currency',
-        'debit_account', 'credit_account', 'reference_type',
-        'created_at'
+        'id', 'entry_type', 'amount_display', 'currency',
+        'from_account', 'to_account', 'reference_type',
+        'recorded_at'
     ]
-    list_filter = ['transaction_type', 'currency', 'created_at']
-    search_fields = ['reference_id', 'debit_account', 'credit_account']
-    date_hierarchy = 'created_at'
+    list_filter = ['entry_type', 'currency', 'recorded_at']
+    search_fields = ['reference_id', 'from_account', 'to_account']
+    date_hierarchy = 'recorded_at'
     readonly_fields = [
-        'id', 'transaction_type', 'amount', 'currency',
-        'debit_account', 'credit_account', 'reference_type',
-        'reference_id', 'metadata', 'checksum', 'created_at'
+        'id', 'entry_type', 'amount', 'currency',
+        'from_account', 'to_account', 'reference_type',
+        'reference_id', 'metadata', 'checksum', 'recorded_at'
     ]
 
     def has_add_permission(self, request):
@@ -72,39 +71,36 @@ class TransactionAdmin(admin.ModelAdmin):
     """إدارة المعاملات"""
 
     list_display = [
-        'id', 'order_link', 'amount_display', 'status_badge',
-        'payment_method', 'tap_charge_id', 'created_at'
+        'id', 'type', 'gross_amount_display', 'status_badge',
+        'payment_method', 'provider_transaction_id', 'created_at'
     ]
     list_filter = ['status', 'payment_method', 'currency', 'created_at']
-    search_fields = ['tap_charge_id', 'tap_transaction_id', 'order__id']
+    search_fields = ['provider_transaction_id', 'order_id']
     date_hierarchy = 'created_at'
-    readonly_fields = ['tap_charge_id', 'tap_transaction_id', 'checksum']
+    readonly_fields = ['provider_transaction_id', 'provider_response']
 
     fieldsets = (
         ('معلومات أساسية', {
-            'fields': ('order', 'amount', 'currency', 'status')
+            'fields': ('type', 'gross_amount', 'net_amount', 'currency', 'status')
         }),
         ('طريقة الدفع', {
-            'fields': ('payment_method', 'tap_charge_id', 'tap_transaction_id')
+            'fields': ('payment_method', 'payment_provider', 'provider_transaction_id')
+        }),
+        ('الأطراف', {
+            'fields': ('payer_type', 'payer_id', 'payee_type', 'payee_id')
+        }),
+        ('المرجع', {
+            'fields': ('order_id', 'booking_id')
         }),
         ('تفاصيل إضافية', {
-            'fields': ('failure_reason', 'metadata'),
+            'fields': ('description', 'metadata', 'provider_response'),
             'classes': ('collapse',)
         }),
     )
 
-    def order_link(self, obj):
-        if obj.order:
-            return format_html(
-                '<a href="/admin/orders/order/{}/change/">{}</a>',
-                obj.order.id, obj.order.id
-            )
-        return '-'
-    order_link.short_description = 'الطلب'
-
-    def amount_display(self, obj):
-        return f"{obj.amount} {obj.currency}"
-    amount_display.short_description = 'المبلغ'
+    def gross_amount_display(self, obj):
+        return f"{obj.gross_amount} {obj.currency}"
+    gross_amount_display.short_description = 'المبلغ'
 
     def status_badge(self, obj):
         colors = {
@@ -129,22 +125,25 @@ class CommissionRuleAdmin(admin.ModelAdmin):
     """إدارة قواعد العمولات"""
 
     list_display = [
-        'name', 'rule_type', 'rate_display', 'category',
-        'min_amount', 'max_amount', 'is_active', 'priority'
+        'name', 'applies_to', 'rate_display',
+        'min_commission', 'max_commission', 'is_active', 'priority'
     ]
-    list_filter = ['rule_type', 'is_active', 'category']
+    list_filter = ['applies_to', 'is_active']
     search_fields = ['name', 'description']
     list_editable = ['is_active', 'priority']
 
     fieldsets = (
         ('معلومات أساسية', {
-            'fields': ('name', 'description', 'rule_type', 'is_active', 'priority')
+            'fields': ('name', 'description', 'applies_to', 'is_active', 'priority')
         }),
         ('نسبة العمولة', {
-            'fields': ('rate', 'fixed_amount')
+            'fields': ('platform_percentage', 'fixed_fee')
         }),
-        ('الشروط', {
-            'fields': ('category', 'vendor', 'min_amount', 'max_amount')
+        ('الحدود', {
+            'fields': ('min_commission', 'max_commission')
+        }),
+        ('النطاق', {
+            'fields': ('category_id', 'store_id', 'product_id')
         }),
         ('الصلاحية', {
             'fields': ('valid_from', 'valid_until')
@@ -152,10 +151,10 @@ class CommissionRuleAdmin(admin.ModelAdmin):
     )
 
     def rate_display(self, obj):
-        if obj.rate:
-            return f"{obj.rate}%"
-        elif obj.fixed_amount:
-            return f"{obj.fixed_amount} SAR"
+        if obj.platform_percentage:
+            return f"{obj.platform_percentage}%"
+        elif obj.fixed_fee:
+            return f"{obj.fixed_fee} SAR"
         return '-'
     rate_display.short_description = 'النسبة/المبلغ'
 
@@ -169,14 +168,14 @@ class VendorBalanceAdmin(admin.ModelAdmin):
     """إدارة أرصدة البائعين"""
 
     list_display = [
-        'vendor', 'vendor_type', 'available_balance', 'pending_balance',
-        'total_earned', 'total_withdrawn', 'last_synced_at'
+        'owner_type', 'owner_id', 'available_balance', 'pending_balance',
+        'total_earned', 'total_withdrawn', 'updated_at'
     ]
-    list_filter = ['vendor_type', 'last_synced_at']
-    search_fields = ['vendor__name']
+    list_filter = ['owner_type', 'auto_payout']
+    search_fields = ['owner_id', 'bank_name', 'bank_iban']
     readonly_fields = [
-        'available_balance', 'pending_balance', 'total_earned',
-        'total_withdrawn', 'last_synced_at'
+        'available_balance', 'pending_balance', 'reserved_balance',
+        'total_earned', 'total_withdrawn', 'updated_at'
     ]
 
     def has_add_permission(self, request):
@@ -192,23 +191,23 @@ class PayoutAdmin(admin.ModelAdmin):
     """إدارة طلبات السحب"""
 
     list_display = [
-        'id', 'vendor', 'amount_display', 'status_badge',
-        'method', 'created_at', 'processed_at'
+        'id', 'balance', 'amount_display', 'status_badge',
+        'method', 'requested_at', 'processed_at'
     ]
-    list_filter = ['status', 'method', 'created_at']
-    search_fields = ['vendor__name', 'bank_account']
-    date_hierarchy = 'created_at'
+    list_filter = ['status', 'method', 'requested_at']
+    search_fields = ['balance__owner_id', 'provider_payout_id']
+    date_hierarchy = 'requested_at'
     actions = ['approve_payouts', 'reject_payouts']
 
     fieldsets = (
         ('معلومات أساسية', {
-            'fields': ('vendor', 'amount', 'method', 'status')
+            'fields': ('balance', 'amount', 'fee', 'net_amount', 'method', 'status')
         }),
-        ('معلومات البنك', {
-            'fields': ('bank_account', 'bank_name')
+        ('الوجهة', {
+            'fields': ('destination',)
         }),
         ('المعالجة', {
-            'fields': ('processed_at', 'processed_by', 'failure_reason')
+            'fields': ('processed_at', 'completed_at', 'approved_by', 'approved_at', 'failure_reason')
         }),
     )
 
@@ -222,7 +221,7 @@ class PayoutAdmin(admin.ModelAdmin):
             'processing': 'blue',
             'completed': 'green',
             'failed': 'red',
-            'cancelled': 'gray',
+            'on_hold': 'gray',
         }
         return format_html(
             '<span style="background-color: {}; color: white; padding: 3px 8px; border-radius: 3px;">{}</span>',
@@ -242,7 +241,7 @@ class PayoutAdmin(admin.ModelAdmin):
     @admin.action(description='رفض طلبات السحب المحددة')
     def reject_payouts(self, request, queryset):
         queryset.filter(status='pending').update(
-            status='cancelled',
+            status='on_hold',
             failure_reason='Rejected by admin'
         )
 
@@ -256,37 +255,35 @@ class ReconciliationRecordAdmin(admin.ModelAdmin):
     """إدارة سجلات التسوية"""
 
     list_display = [
-        'reconciliation_date', 'transaction_id', 'status_badge',
-        'our_amount', 'provider_amount', 'difference',
-        'requires_review', 'reviewed_at'
+        'period_start', 'period_end', 'provider', 'is_matched_badge',
+        'our_total_amount', 'provider_total_amount', 'amount_difference',
+        'reviewed_at'
     ]
-    list_filter = ['status', 'requires_review', 'provider', 'reconciliation_date']
-    search_fields = ['transaction_id', 'provider_reference']
-    date_hierarchy = 'reconciliation_date'
+    list_filter = ['is_matched', 'provider', 'period_start']
+    search_fields = ['provider_report_id']
+    date_hierarchy = 'period_start'
     readonly_fields = [
-        'transaction_id', 'our_amount', 'provider_amount',
-        'difference', 'provider_reference'
+        'our_total_transactions', 'our_total_amount', 'our_total_fees',
+        'provider_total_transactions', 'provider_total_amount', 'provider_total_fees',
+        'amount_difference', 'transaction_count_difference', 'fee_difference',
     ]
     actions = ['mark_as_reviewed']
 
-    def status_badge(self, obj):
-        colors = {
-            'matched': 'green',
-            'discrepancy': 'red',
-            'missing_in_provider': 'orange',
-            'missing_in_our_system': 'purple',
-        }
+    def is_matched_badge(self, obj):
+        if obj.is_matched:
+            return format_html(
+                '<span style="background-color: green; color: white; padding: 3px 8px; border-radius: 3px;">متطابق ✓</span>'
+            )
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 8px; border-radius: 3px;">{}</span>',
-            colors.get(obj.status, 'gray'), obj.status
+            '<span style="background-color: red; color: white; padding: 3px 8px; border-radius: 3px;">غير متطابق ✗</span>'
         )
-    status_badge.short_description = 'الحالة'
+    is_matched_badge.short_description = 'الحالة'
 
     @admin.action(description='تعليم كمراجع')
     def mark_as_reviewed(self, request, queryset):
         queryset.update(
             reviewed_at=timezone.now(),
-            reviewed_by=request.user
+            reviewed_by=request.user.id
         )
 
 
@@ -299,22 +296,25 @@ class PricingRuleAdmin(admin.ModelAdmin):
     """إدارة قواعد التسعير"""
 
     list_display = [
-        'name', 'pricing_type', 'base_price', 'category',
-        'is_active', 'priority'
+        'name', 'pricing_type', 'base_price', 'unit_price',
+        'is_active'
     ]
-    list_filter = ['pricing_type', 'is_active', 'category']
-    search_fields = ['name', 'description']
-    list_editable = ['is_active', 'priority']
+    list_filter = ['pricing_type', 'is_active']
+    search_fields = ['name']
+    list_editable = ['is_active']
 
     fieldsets = (
         ('معلومات أساسية', {
-            'fields': ('name', 'description', 'pricing_type', 'is_active', 'priority')
+            'fields': ('name', 'pricing_type', 'is_active')
         }),
         ('التسعير', {
-            'fields': ('base_price', 'minimum_charge')
+            'fields': ('base_price', 'unit_price', 'min_charge')
+        }),
+        ('الحدود', {
+            'fields': ('min_units', 'max_units')
         }),
         ('إعدادات إضافية', {
-            'fields': ('config', 'category', 'vendor'),
+            'fields': ('tiered_pricing', 'peak_hours_multiplier', 'peak_hours'),
             'classes': ('collapse',)
         }),
     )
@@ -325,11 +325,10 @@ class DeliveryPricingRuleAdmin(admin.ModelAdmin):
     """إدارة قواعد تسعير التوصيل"""
 
     list_display = [
-        'name', 'pricing_type', 'base_fee', 'rate_per_km',
-        'free_km', 'is_active'
+        'id', 'pricing_type', 'base_fee', 'per_km_fee',
+        'free_delivery_threshold', 'is_active'
     ]
     list_filter = ['pricing_type', 'is_active']
-    search_fields = ['name']
     list_editable = ['is_active']
 
 
@@ -342,47 +341,42 @@ class InvoiceAdmin(admin.ModelAdmin):
     """إدارة الفواتير"""
 
     list_display = [
-        'invoice_number', 'order_link', 'vendor_name', 'customer_name',
+        'invoice_number', 'seller_type', 'seller_id', 'buyer_type', 'buyer_id',
         'total', 'zatca_status_badge', 'invoice_date'
     ]
-    list_filter = ['zatca_status', 'invoice_date']
-    search_fields = ['invoice_number', 'vendor_name', 'customer_name']
+    list_filter = ['zatca_status', 'invoice_date', 'seller_type']
+    search_fields = ['invoice_number', 'seller_id', 'buyer_id']
     date_hierarchy = 'invoice_date'
     readonly_fields = [
-        'invoice_number', 'accounting_provider', 'accounting_provider_id',
-        'zatca_status', 'zatca_qr_code', 'zatca_hash'
+        'invoice_number', 'external_system', 'external_invoice_id',
+        'zatca_status', 'zatca_qr_code', 'zatca_invoice_hash'
     ]
 
     fieldsets = (
         ('معلومات الفاتورة', {
-            'fields': ('invoice_number', 'invoice_date', 'order')
+            'fields': ('invoice_number', 'invoice_date', 'due_date', 'order_id')
         }),
         ('البائع', {
-            'fields': ('vendor_name', 'vendor_vat', 'vendor_cr')
+            'fields': ('seller_type', 'seller_id')
         }),
-        ('العميل', {
-            'fields': ('customer_name', 'customer_vat', 'customer_phone')
+        ('المشتري', {
+            'fields': ('buyer_type', 'buyer_id')
         }),
         ('المبالغ', {
-            'fields': ('subtotal', 'delivery_total', 'tax_rate', 'tax_amount', 'total')
+            'fields': ('subtotal', 'discount', 'vat_rate', 'vat_amount', 'total', 'currency')
+        }),
+        ('البنود', {
+            'fields': ('line_items',),
+            'classes': ('collapse',)
         }),
         ('ZATCA', {
             'fields': (
-                'zatca_status', 'accounting_provider', 'accounting_provider_id',
-                'zatca_qr_code', 'zatca_hash'
+                'zatca_status', 'external_system', 'external_invoice_id',
+                'zatca_qr_code', 'zatca_invoice_hash', 'zatca_response'
             ),
             'classes': ('collapse',)
         }),
     )
-
-    def order_link(self, obj):
-        if obj.order:
-            return format_html(
-                '<a href="/admin/orders/order/{}/change/">{}</a>',
-                obj.order.id, str(obj.order.id)[:8]
-            )
-        return '-'
-    order_link.short_description = 'الطلب'
 
     def zatca_status_badge(self, obj):
         colors = {

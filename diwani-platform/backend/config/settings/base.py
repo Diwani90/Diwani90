@@ -223,7 +223,13 @@ LOCALE_PATHS = [
 # ===================================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Only include static directory if it exists and is different from STATIC_ROOT
+_static_dir = BASE_DIR / 'static'
+if _static_dir.exists() and _static_dir != STATIC_ROOT:
+    STATICFILES_DIRS = [_static_dir]
+else:
+    STATICFILES_DIRS = []
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 

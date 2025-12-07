@@ -190,7 +190,7 @@ def store_review_post_save(sender, instance, **kwargs):
 # ===================================
 # Vendor Signals
 # ===================================
-@receiver(post_save, sender='accounts.VendorProfile')
+@receiver(post_save, sender='users.VendorProfile')
 def vendor_post_save(sender, instance, created: bool, **kwargs):
     """
     فهرسة المورد عند الإنشاء أو التحديث
@@ -207,7 +207,7 @@ def vendor_post_save(sender, instance, created: bool, **kwargs):
         logger.error(f"[Search] Error indexing vendor {instance.id}: {e}")
 
 
-@receiver(post_delete, sender='accounts.VendorProfile')
+@receiver(post_delete, sender='users.VendorProfile')
 def vendor_post_delete(sender, instance, **kwargs):
     """
     حذف المورد من الفهرس
@@ -225,7 +225,7 @@ def vendor_post_delete(sender, instance, **kwargs):
 # ===================================
 # Category Signals
 # ===================================
-@receiver(post_save, sender='products.ProductCategory')
+@receiver(post_save, sender='products.Category')
 def category_post_save(sender, instance, created: bool, **kwargs):
     """
     فهرسة التصنيف عند الإنشاء أو التحديث
@@ -246,22 +246,7 @@ def category_post_save(sender, instance, created: bool, **kwargs):
         logger.error(f"[Search] Error indexing category {instance.id}: {e}")
 
 
-@receiver(post_save, sender='stores.StoreCategory')
-def store_category_post_save(sender, instance, created: bool, **kwargs):
-    """
-    فهرسة تصنيف المتجر
-    """
-    if not is_search_enabled():
-        return
-
-    try:
-        index_category_task.delay(instance.id, category_type='store')
-        logger.info(f"[Search] Store category indexed: {instance.id}")
-    except Exception as e:
-        logger.error(f"[Search] Error indexing store category: {e}")
-
-
-@receiver(post_delete, sender='products.ProductCategory')
+@receiver(post_delete, sender='products.Category')
 def category_post_delete(sender, instance, **kwargs):
     """
     حذف التصنيف من الفهرس
@@ -279,7 +264,7 @@ def category_post_delete(sender, instance, **kwargs):
 # ===================================
 # User Signals (للعملاء الجدد)
 # ===================================
-@receiver(post_save, sender='accounts.User')
+@receiver(post_save, sender='users.User')
 def user_post_save(sender, instance, created: bool, **kwargs):
     """
     معالجة المستخدم الجديد
