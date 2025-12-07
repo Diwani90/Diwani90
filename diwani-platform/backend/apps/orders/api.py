@@ -51,6 +51,149 @@ router = Router()
 
 
 # =============================================
+# دوال مساعدة للتتبع
+# =============================================
+
+def _get_pickup_location(order):
+    """الحصول على موقع الاستلام (موقع المتجر)"""
+    if not order or not order.vendor:
+        return None
+
+    vendor = order.vendor
+
+    # محاولة الحصول على الموقع من location field
+    if hasattr(vendor, 'location') and vendor.location:
+        return {
+            'latitude': vendor.location.y,
+            'longitude': vendor.location.x,
+            'address': getattr(vendor, 'address', '') or '',
+            'name': vendor.name or '',
+        }
+
+    # محاولة الحصول من الإحداثيات المباشرة
+    if hasattr(vendor, 'latitude') and hasattr(vendor, 'longitude'):
+        if vendor.latitude and vendor.longitude:
+            return {
+                'latitude': float(vendor.latitude),
+                'longitude': float(vendor.longitude),
+                'address': getattr(vendor, 'address', '') or '',
+                'name': vendor.name or '',
+            }
+
+    # إرجاع العنوان فقط إن وجد
+    if hasattr(vendor, 'address') and vendor.address:
+        return {
+            'latitude': None,
+            'longitude': None,
+            'address': vendor.address,
+            'name': vendor.name or '',
+        }
+
+    return None
+
+
+def _get_destination_location(order, delivery):
+    """الحصول على موقع الوجهة (عنوان العميل)"""
+    # أولاً: من التوصيل
+    if delivery:
+        if hasattr(delivery, 'delivery_location') and delivery.delivery_location:
+            return {
+                'latitude': delivery.delivery_location.y,
+                'longitude': delivery.delivery_location.x,
+                'address': str(delivery.delivery_address) if delivery.delivery_address else '',
+            }
+
+        if delivery.delivery_address:
+            addr = delivery.delivery_address
+            if hasattr(addr, 'location') and addr.location:
+                return {
+                    'latitude': addr.location.y,
+                    'longitude': addr.location.x,
+                    'address': str(addr),
+                }
+
+            # إحداثيات مباشرة
+            if hasattr(addr, 'latitude') and hasattr(addr, 'longitude'):
+                if addr.latitude and addr.longitude:
+                    return {
+                        'latitude': float(addr.latitude),
+                        'longitude': float(addr.longitude),
+                        'address': str(addr),
+                    }
+
+            return {
+                'latitude': None,
+                'longitude': None,
+                'address': str(addr),
+            }
+
+    # ثانياً: من الطلب
+    if order and hasattr(order, 'delivery_address') and order.delivery_address:
+        addr = order.delivery_address
+        if hasattr(addr, 'location') and addr.location:
+            return {
+                'latitude': addr.location.y,
+                'longitude': addr.location.x,
+                'address': str(addr),
+            }
+
+        return {
+            'latitude': None,
+            'longitude': None,
+            'address': str(addr),
+        }
+
+    return None
+
+
+def _calculate_eta(delivery):
+    """حساب الوقت المتوقع للوصول"""
+    from django.utils import timezone
+    from datetime import timedelta
+
+    if not delivery:
+        return None
+
+    # إذا كان هناك وقت متوقع محفوظ
+    if hasattr(delivery, 'estimated_arrival') and delivery.estimated_arrival:
+        return delivery.estimated_arrival.isoformat()
+
+    # حساب تقديري بناءً على الحالة والموقع
+    if delivery.status == 'in_transit' or delivery.status == 'out_for_delivery':
+        # تقدير بناءً على المسافة المتبقية
+        if delivery.current_location and hasattr(delivery, 'delivery_location') and delivery.delivery_location:
+            try:
+                # حساب المسافة
+                distance = delivery.current_location.distance(delivery.delivery_location)
+                distance_km = distance.km if hasattr(distance, 'km') else float(distance) * 111
+
+                # تقدير الوقت: 3 دقائق لكل كيلومتر في المتوسط (سرعة 20 كم/ساعة في المدينة)
+                estimated_minutes = max(5, int(distance_km * 3))
+
+                eta = timezone.now() + timedelta(minutes=estimated_minutes)
+                return eta.isoformat()
+
+            except Exception:
+                pass
+
+        # تقدير افتراضي: 30 دقيقة
+        eta = timezone.now() + timedelta(minutes=30)
+        return eta.isoformat()
+
+    elif delivery.status == 'assigned':
+        # السائق لم يبدأ بعد: 45 دقيقة تقديرياً
+        eta = timezone.now() + timedelta(minutes=45)
+        return eta.isoformat()
+
+    elif delivery.status == 'picked_up':
+        # تم الاستلام، في الطريق: 20 دقيقة تقديرياً
+        eta = timezone.now() + timedelta(minutes=20)
+        return eta.isoformat()
+
+    return None
+
+
+# =============================================
 # API العميل - Customer Orders
 # =============================================
 
@@ -195,9 +338,9 @@ def track_order(request: HttpRequest, order_id: UUID):
             'longitude': delivery.current_location.x,
             'recorded_at': delivery.last_location_update,
         } if delivery and delivery.current_location else None,
-        'pickup_location': None,  # TODO: إضافة موقع الاستلام
-        'destination_location': None,  # TODO: إضافة الوجهة
-        'estimated_arrival': None,  # TODO: حساب الوقت المتوقع
+        'pickup_location': _get_pickup_location(order),
+        'destination_location': _get_destination_location(order, delivery),
+        'estimated_arrival': _calculate_eta(delivery) if delivery else None,
         'tracking_points': list(
             delivery.tracking_points.values(
                 'latitude', 'longitude', 'accuracy', 'speed', 'heading', 'recorded_at'

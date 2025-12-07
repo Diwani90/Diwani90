@@ -359,13 +359,143 @@ def download_invoice_pdf(request, invoice_id: UUID):
         order__vendor=store
     )
 
-    # TODO: إنشاء PDF
-    # في الإنتاج، استخدم مكتبة مثل weasyprint أو reportlab
+    # إنشاء PDF للفاتورة
+    pdf_content = _generate_invoice_pdf(invoice, store)
 
-    return HttpResponse(
-        f'فاتورة رقم {invoice.invoice_number}',
-        content_type='application/pdf'
-    )
+    response = HttpResponse(pdf_content, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="invoice_{invoice.invoice_number}.pdf"'
+
+    return response
+
+
+def _generate_invoice_pdf(invoice, store) -> bytes:
+    """
+    إنشاء PDF للفاتورة
+
+    يدعم:
+    - ReportLab (مفضل)
+    - PDF نصي بسيط (Fallback)
+    """
+    import logging
+    from io import BytesIO
+
+    logger = logging.getLogger(__name__)
+
+    # محاولة استخدام ReportLab
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm)
+
+        styles = getSampleStyleSheet()
+        elements = []
+
+        # عنوان الفاتورة
+        elements.append(Paragraph(f"<b>Invoice: {invoice.invoice_number}</b>", styles['Heading1']))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # معلومات المتجر
+        elements.append(Paragraph(f"<b>Store:</b> {store.name}", styles['Normal']))
+        elements.append(Paragraph(f"<b>Date:</b> {invoice.issue_date}", styles['Normal']))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # معلومات العميل
+        if invoice.order and invoice.order.customer:
+            customer = invoice.order.customer
+            customer_name = customer.get_full_name() or str(customer.phone_number)
+            elements.append(Paragraph(f"<b>Customer:</b> {customer_name}", styles['Normal']))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # جدول العناصر
+        table_data = [['Product', 'Qty', 'Price', 'Total']]
+
+        if invoice.order:
+            for item in invoice.order.items.all():
+                table_data.append([
+                    str(item.product_name or 'Product')[:30],
+                    str(item.quantity),
+                    f"{item.unit_price} SAR",
+                    f"{item.total_price} SAR",
+                ])
+
+        if len(table_data) > 1:
+            table = Table(table_data, colWidths=[8*cm, 2*cm, 3*cm, 3*cm])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ]))
+            elements.append(table)
+            elements.append(Spacer(1, 0.5*cm))
+
+        # المجاميع
+        elements.append(Paragraph(f"<b>Subtotal:</b> {invoice.subtotal} SAR", styles['Normal']))
+        elements.append(Paragraph(f"<b>Tax (15%):</b> {invoice.tax_amount} SAR", styles['Normal']))
+        elements.append(Paragraph(f"<b>Total:</b> {invoice.total_amount} SAR", styles['Heading2']))
+
+        doc.build(elements)
+        return buffer.getvalue()
+
+    except ImportError:
+        logger.warning('ReportLab not installed. Using basic PDF. Install with: pip install reportlab')
+
+    # Fallback: PDF نصي بسيط
+    content_stream = f"""BT
+/F1 16 Tf
+50 750 Td
+(INVOICE: {invoice.invoice_number}) Tj
+/F1 12 Tf
+0 -30 Td
+(Store: {store.name}) Tj
+0 -20 Td
+(Date: {invoice.issue_date}) Tj
+0 -40 Td
+(Subtotal: {invoice.subtotal} SAR) Tj
+0 -20 Td
+(Tax (15%): {invoice.tax_amount} SAR) Tj
+0 -20 Td
+(Total: {invoice.total_amount} SAR) Tj
+ET"""
+
+    pdf_content = f"""%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
+4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+5 0 obj << /Length {len(content_stream)} >>
+stream
+{content_stream}
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000266 00000 n
+0000000333 00000 n
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+{400 + len(content_stream)}
+%%EOF"""
+
+    return pdf_content.encode('latin-1')
 
 
 # =============================================
@@ -477,7 +607,17 @@ def reconciliation_report(
 @router.get('/admin/reconciliation/run', tags=['إدارة'])
 def run_reconciliation(request, date_str: Optional[str] = None):
     """تشغيل التسوية يدوياً (للمسؤولين فقط)"""
-    # TODO: التحقق من صلاحيات المسؤول
+    # التحقق من صلاحيات المسؤول
+    if not request.user.is_authenticated:
+        return {'error': 'يجب تسجيل الدخول'}
+
+    if not (request.user.is_staff or request.user.is_superuser):
+        return {'error': 'هذه الوظيفة متاحة للمسؤولين فقط'}
+
+    # التحقق من صلاحية محددة إن وجدت
+    if hasattr(request.user, 'has_perm') and not request.user.has_perm('finance.run_reconciliation'):
+        if not request.user.is_superuser:
+            return {'error': 'لا تملك صلاحية تشغيل التسوية'}
 
     from .tasks import run_daily_reconciliation
 
@@ -492,7 +632,17 @@ def run_reconciliation(request, date_str: Optional[str] = None):
 @router.get('/admin/ledger/verify', tags=['إدارة'])
 def verify_ledger(request):
     """التحقق من سلامة السجل المالي"""
-    # TODO: التحقق من صلاحيات المسؤول
+    # التحقق من صلاحيات المسؤول
+    if not request.user.is_authenticated:
+        return {'error': 'يجب تسجيل الدخول'}
+
+    if not (request.user.is_staff or request.user.is_superuser):
+        return {'error': 'هذه الوظيفة متاحة للمسؤولين فقط'}
+
+    # التحقق من صلاحية محددة إن وجدت
+    if hasattr(request.user, 'has_perm') and not request.user.has_perm('finance.verify_ledger'):
+        if not request.user.is_superuser:
+            return {'error': 'لا تملك صلاحية التحقق من السجل المالي'}
 
     from .services import ledger_service
 

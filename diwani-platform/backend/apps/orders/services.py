@@ -461,8 +461,56 @@ class OrderService:
 
     def _determine_order_type(self, items: List[Dict]) -> str:
         """تحديد نوع الطلب بناءً على العناصر"""
-        # TODO: تحليل العناصر لتحديد النوع
-        return OrderType.PRODUCT
+        from apps.products.models import Product
+
+        if not items:
+            return OrderType.PRODUCT
+
+        # جمع أنواع المنتجات
+        types_found = set()
+
+        for item in items:
+            product_id = item.get('product_id')
+            if product_id:
+                try:
+                    product = Product.objects.get(id=product_id)
+                    product_type = getattr(product, 'product_type', None)
+
+                    if product_type:
+                        # تحويل نوع المنتج إلى نوع الطلب
+                        type_mapping = {
+                            'product': OrderType.PRODUCT,
+                            'service': OrderType.SERVICE,
+                            'rental': OrderType.RENTAL,
+                            'equipment': OrderType.RENTAL,
+                            'transport': OrderType.TRANSPORT,
+                            'installation': OrderType.INSTALLATION,
+                            'maintenance': OrderType.MAINTENANCE,
+                            'labor': OrderType.LABOR,
+                        }
+                        order_type = type_mapping.get(product_type, OrderType.PRODUCT)
+                        types_found.add(order_type)
+                except Product.DoesNotExist:
+                    pass
+
+            # التحقق من نوع العنصر المباشر
+            item_type = item.get('item_type') or item.get('type')
+            if item_type:
+                if item_type == 'rental' or item.get('rental_start'):
+                    types_found.add(OrderType.RENTAL)
+                elif item_type == 'service':
+                    types_found.add(OrderType.SERVICE)
+                elif item_type == 'transport':
+                    types_found.add(OrderType.TRANSPORT)
+
+        # تحديد النوع النهائي
+        if not types_found:
+            return OrderType.PRODUCT
+        elif len(types_found) == 1:
+            return types_found.pop()
+        else:
+            # أكثر من نوع = مختلط
+            return OrderType.MIXED
 
     def _calculate_delivery_fee(
         self,
@@ -486,14 +534,115 @@ class OrderService:
         base_fee = base_fees.get(delivery_type, Decimal('25'))
 
         # إضافة رسوم حسب المسافة
-        # TODO: حساب المسافة وإضافة الرسوم
+        try:
+            distance_km = self._estimate_distance(order.vendor, address)
+
+            # رسوم المسافة: 2 ريال لكل كيلومتر بعد أول 5 كم
+            if distance_km > 5:
+                extra_distance = distance_km - Decimal('5')
+                distance_fee = (extra_distance * Decimal('2')).quantize(Decimal('0.01'))
+                base_fee += distance_fee
+
+            # رسوم إضافية للمسافات البعيدة (أكثر من 20 كم)
+            if distance_km > 20:
+                long_distance_surcharge = Decimal('15')
+                base_fee += long_distance_surcharge
+
+            # رسوم إضافية للمسافات البعيدة جداً (أكثر من 50 كم)
+            if distance_km > 50:
+                very_long_distance_surcharge = Decimal('30')
+                base_fee += very_long_distance_surcharge
+
+        except Exception:
+            # في حالة فشل حساب المسافة، نستخدم الرسوم الأساسية فقط
+            pass
 
         return base_fee
 
     def _apply_coupon(self, order: Order, coupon_code: str) -> Decimal:
         """تطبيق كوبون الخصم"""
-        # TODO: التحقق من صلاحية الكوبون وتطبيقه
-        return Decimal('0')
+        from django.core.cache import cache
+
+        if not coupon_code:
+            return Decimal('0')
+
+        try:
+            # محاولة الحصول على الكوبون من قاعدة البيانات
+            from apps.marketing.models import Coupon, CouponUsage
+
+            coupon = Coupon.objects.filter(
+                code__iexact=coupon_code.strip(),
+                is_active=True
+            ).first()
+
+            if not coupon:
+                return Decimal('0')
+
+            # التحقق من صلاحية الكوبون
+            now = timezone.now()
+
+            # التحقق من تاريخ البدء
+            if coupon.start_date and coupon.start_date > now:
+                return Decimal('0')
+
+            # التحقق من تاريخ الانتهاء
+            if coupon.end_date and coupon.end_date < now:
+                return Decimal('0')
+
+            # التحقق من عدد مرات الاستخدام الكلي
+            if coupon.max_uses and coupon.usage_count >= coupon.max_uses:
+                return Decimal('0')
+
+            # التحقق من عدد مرات استخدام المستخدم
+            if coupon.max_uses_per_user:
+                user_usage = CouponUsage.objects.filter(
+                    coupon=coupon,
+                    user=order.customer
+                ).count()
+                if user_usage >= coupon.max_uses_per_user:
+                    return Decimal('0')
+
+            # التحقق من الحد الأدنى للطلب
+            if coupon.minimum_order_amount and order.subtotal < coupon.minimum_order_amount:
+                return Decimal('0')
+
+            # التحقق من المتجر (إن كان الكوبون خاص بمتجر معين)
+            if coupon.vendor_id and coupon.vendor_id != order.vendor_id:
+                return Decimal('0')
+
+            # حساب الخصم
+            if coupon.discount_type == 'percentage':
+                discount = (order.subtotal * coupon.discount_value / 100).quantize(Decimal('0.01'))
+                # تطبيق الحد الأقصى للخصم
+                if coupon.max_discount_amount and discount > coupon.max_discount_amount:
+                    discount = coupon.max_discount_amount
+            else:  # fixed amount
+                discount = min(coupon.discount_value, order.subtotal)
+
+            # تسجيل استخدام الكوبون
+            CouponUsage.objects.create(
+                coupon=coupon,
+                user=order.customer,
+                order=order,
+                discount_amount=discount
+            )
+
+            # تحديث عداد الاستخدام
+            coupon.usage_count += 1
+            coupon.save(update_fields=['usage_count'])
+
+            # حفظ الكوبون في الطلب
+            order.coupon_code = coupon_code
+            order.coupon_discount = discount
+
+            return discount
+
+        except ImportError:
+            # إذا لم يوجد تطبيق التسويق، نتجاهل الكوبون
+            return Decimal('0')
+        except Exception:
+            # في حالة أي خطأ، نرجع صفر
+            return Decimal('0')
 
     def _calculate_commissions(self, order: Order, vendor):
         """حساب العمولات"""
@@ -1009,7 +1158,45 @@ class DeliveryService:
             driver.driver_profile.save()
 
         # إرسال إشعار للسائق
-        # TODO: إرسال إشعار
+        try:
+            from apps.notifications.services import notification_service
+            import asyncio
+
+            # بيانات الإشعار
+            notification_data = {
+                'type': 'driver_assigned',
+                'title': 'طلب توصيل جديد',
+                'body': f'تم تعيينك لتوصيل الطلب رقم {delivery.order.order_number}',
+                'data': {
+                    'order_id': str(delivery.order_id),
+                    'order_number': delivery.order.order_number,
+                    'delivery_id': str(delivery.id),
+                    'pickup_address': delivery.order.vendor.address if hasattr(delivery.order.vendor, 'address') else '',
+                    'delivery_address': str(delivery.delivery_address) if delivery.delivery_address else '',
+                    'action': 'view_delivery',
+                },
+                'channels': ['push', 'sms'],
+                'priority': 'high',
+            }
+
+            # إرسال الإشعار
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    notification_service.send_to_user(
+                        user_id=str(driver.id),
+                        **notification_data
+                    )
+                )
+            finally:
+                loop.close()
+
+        except Exception as e:
+            # تسجيل الخطأ ولكن لا نفشل العملية
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"فشل إرسال إشعار السائق: {e}")
 
         return True
 

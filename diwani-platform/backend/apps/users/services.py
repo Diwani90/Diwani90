@@ -802,7 +802,44 @@ class AuthService:
         referrer.loyalty_points += bonus_points
         referrer.save(update_fields=['loyalty_points'])
 
-        # TODO: إرسال إشعار للمُحيل
+        # إرسال إشعار للمُحيل
+        try:
+            from apps.notifications.services import notification_service
+            import asyncio
+
+            notification_data = {
+                'type': 'referral_bonus',
+                'title': 'مكافأة إحالة! 🎉',
+                'body': f'تهانينا! لقد حصلت على {bonus_points} نقطة مكافأة لأن صديقك {new_user.first_name or "مستخدم جديد"} انضم للمنصة باستخدام رمز الإحالة الخاص بك.',
+                'data': {
+                    'type': 'referral_bonus',
+                    'bonus_points': bonus_points,
+                    'new_user_name': new_user.first_name or 'مستخدم جديد',
+                    'total_points': referrer.loyalty_points,
+                    'action': 'view_rewards',
+                },
+                'channels': ['push', 'sms'],
+                'priority': 'normal',
+            }
+
+            # إرسال الإشعار بشكل غير متزامن
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    notification_service.send_to_user(
+                        user_id=str(referrer.id),
+                        **notification_data
+                    )
+                )
+            finally:
+                loop.close()
+
+        except Exception as e:
+            # تسجيل الخطأ ولكن لا نفشل العملية
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"فشل إرسال إشعار الإحالة: {e}")
 
 
 # =============================================
