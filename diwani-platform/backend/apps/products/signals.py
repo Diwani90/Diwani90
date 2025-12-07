@@ -41,5 +41,5 @@ def connect_signals():
 # ربط الإشارات عند استيراد الملف
 try:
     connect_signals()
-except Exception:
-    pass
+except Exception as e:
+    logger.warning(f"Failed to connect product signals: {e}")

@@ -12,6 +12,7 @@ from uuid import UUID
 
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
+from django.contrib.gis.db.models.functions import Distance
 from django.db.models import Q, Avg, Count
 from django.shortcuts import get_object_or_404
 from ninja import Router, Query, File, UploadedFile, Form
@@ -136,7 +137,7 @@ def nearby_stores(
         location__isnull=False,
         location__distance_lte=(user_location, D(km=radius_km))
     ).annotate(
-        distance=models.functions.Distance('location', user_location)
+        distance=Distance('location', user_location)
     )
 
     if store_type:

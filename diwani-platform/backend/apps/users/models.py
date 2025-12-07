@@ -842,6 +842,8 @@ class UserAddress(models.Model):
         return f'{self.label or self.address_type} - {self.city}'
 
     def save(self, *args, **kwargs):
+        from django.db import transaction
+
         # تحديث الإحداثيات من الموقع
         if self.location:
             self.longitude = self.location.x
@@ -850,12 +852,13 @@ class UserAddress(models.Model):
             from django.contrib.gis.geos import Point
             self.location = Point(float(self.longitude), float(self.latitude), srid=4326)
 
-        # إلغاء العنوان الافتراضي السابق
-        if self.is_default:
-            UserAddress.objects.filter(
-                user=self.user,
-                is_default=True
-            ).exclude(id=self.id).update(is_default=False)
+        # إلغاء العنوان الافتراضي السابق (مع قفل لتجنب race conditions)
+        if self.is_default and self.user_id:
+            with transaction.atomic():
+                UserAddress.objects.select_for_update().filter(
+                    user=self.user,
+                    is_default=True
+                ).exclude(id=self.id).update(is_default=False)
 
         super().save(*args, **kwargs)
 

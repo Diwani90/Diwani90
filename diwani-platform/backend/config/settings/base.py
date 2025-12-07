@@ -26,7 +26,8 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 # ===================================
 # Security Settings
 # ===================================
-SECRET_KEY = env('SECRET_KEY', default='diwani-dev-secret-key-change-in-production')
+# CRITICAL: SECRET_KEY must be set in environment, no default for production safety
+SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 ALLOWED_HOSTS = env('ALLOWED_HOSTS')
 
@@ -562,7 +563,9 @@ PASSWORD_HASHERS = [
 ]
 
 # Field-Level Encryption Key
-FIELD_ENCRYPTION_KEY = env('FIELD_ENCRYPTION_KEY', default=SECRET_KEY[:32])
+# CRITICAL: Must be exactly 32 characters for AES-256
+# Generate with: python -c "import secrets; print(secrets.token_hex(16))"
+FIELD_ENCRYPTION_KEY = env('FIELD_ENCRYPTION_KEY')
 
 # Rate Limiting Settings
 RATELIMIT_ENABLE = True

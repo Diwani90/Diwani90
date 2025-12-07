@@ -258,9 +258,9 @@ class ChatService:
             try:
                 fernet = Fernet(self._encryption._master_key)
                 return fernet.decrypt(encrypted_key)
-            except Exception:
-                # المفتاح تالف أو المفتاح الرئيسي تغير
-                pass
+            except Exception as e:
+                # المفتاح تالف أو المفتاح الرئيسي تغير - ننشئ مفتاح جديد
+                logger.warning(f"Failed to decrypt conversation key, will regenerate: {type(e).__name__}")
 
         # إنشاء مفتاح جديد
         key_id, new_key = self._encryption.generate_conversation_key()

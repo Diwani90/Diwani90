@@ -49,15 +49,24 @@ const HomePage = () => {
 
   const fetchStats = async () => {
     try {
-      // Mock stats for now
+      const response = await axios.get('/platform/stats/');
       setStats({
-        totalSuppliers: 150,
-        totalProducts: 2500,
-        totalOrders: 1200,
-        totalUsers: 800
+        totalSuppliers: response.data.total_suppliers || 0,
+        totalProducts: response.data.total_products || 0,
+        totalOrders: response.data.total_orders || 0,
+        totalUsers: response.data.total_users || 0,
+        averageRating: response.data.average_rating || 0
       });
     } catch (error) {
+      // في حالة خطأ نعرض صفر بدلاً من أرقام وهمية
       console.error('Error fetching stats:', error);
+      setStats({
+        totalSuppliers: 0,
+        totalProducts: 0,
+        totalOrders: 0,
+        totalUsers: 0,
+        averageRating: 0
+      });
     }
   };
 
@@ -175,7 +184,7 @@ const HomePage = () => {
               <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <StarIcon className="h-8 w-8 text-orange-600" />
               </div>
-              <h3 className="text-3xl font-bold text-gray-900">4.8</h3>
+              <h3 className="text-3xl font-bold text-gray-900">{stats.averageRating || '-'}</h3>
               <p className="text-gray-600">تقييم العملاء</p>
             </div>
           </div>
@@ -317,14 +326,14 @@ const HomePage = () => {
                 <PhoneIcon className="h-8 w-8" />
               </div>
               <h3 className="text-xl font-bold mb-2">الهاتف</h3>
-              <p className="text-gray-300">+966 50 123 4567</p>
+              <p className="text-gray-300 dir-ltr">920 000 000</p>
             </div>
             <div className="text-center">
               <div className="bg-green-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
                 <EnvelopeIcon className="h-8 w-8" />
               </div>
               <h3 className="text-xl font-bold mb-2">البريد الإلكتروني</h3>
-              <p className="text-gray-300">info@buildingplatform.sa</p>
+              <p className="text-gray-300">support@diwani.sa</p>
             </div>
             <div className="text-center">
               <div className="bg-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">

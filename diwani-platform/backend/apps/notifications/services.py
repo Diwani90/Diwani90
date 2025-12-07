@@ -276,12 +276,9 @@ class PushNotificationProvider(DeliveryProvider):
 
         # وضع الاختبار
         if test_mode:
-            logger.info(f"[FCM TEST] Token: {token[:20]}... | Title: {notification.title}")
-            print(f'╔══════════════════════════════════════════╗')
-            print(f'║ 🔔 FCM TEST MODE (Android/Web)           ║')
-            print(f'║ Token: {token[:30]:<30}... ║')
-            print(f'║ Title: {notification.title[:30]:<30} ║')
-            print(f'╚══════════════════════════════════════════╝')
+            # SECURITY: لا نطبع tokens في logs - نستخدم أقنعة
+            masked_token = token[:10] + '*' * 10 + '...' if len(token) > 20 else '***'
+            logger.info(f"[FCM TEST] Token: {masked_token} | Title: {notification.title[:30]}")
 
             return DeliveryResult(
                 channel=self.channel,
@@ -393,12 +390,9 @@ class PushNotificationProvider(DeliveryProvider):
 
         # وضع الاختبار
         if test_mode:
-            logger.info(f"[APNS TEST] Token: {token[:20]}... | Title: {notification.title}")
-            print(f'╔══════════════════════════════════════════╗')
-            print(f'║ 🍎 APNS TEST MODE (iOS)                  ║')
-            print(f'║ Token: {token[:30]:<30}... ║')
-            print(f'║ Title: {notification.title[:30]:<30} ║')
-            print(f'╚══════════════════════════════════════════╝')
+            # SECURITY: لا نطبع tokens في logs - نستخدم أقنعة
+            masked_token = token[:10] + '*' * 10 + '...' if len(token) > 20 else '***'
+            logger.info(f"[APNS TEST] Token: {masked_token} | Title: {notification.title[:30]}")
 
             return DeliveryResult(
                 channel=self.channel,
@@ -563,12 +557,9 @@ class SMSProvider(DeliveryProvider):
 
         # وضع الاختبار
         if test_mode:
-            logger.info(f"[SMS TEST] To: {phone} | Message: {message[:50]}...")
-            print(f'╔══════════════════════════════════════════╗')
-            print(f'║ 📱 SMS NOTIFICATION TEST MODE            ║')
-            print(f'║ Phone: {phone:<33} ║')
-            print(f'║ Message: {message[:30]:<30}... ║')
-            print(f'╚══════════════════════════════════════════╝')
+            # SECURITY: لا نطبع أرقام الهواتف كاملة في logs - نستخدم أقنعة
+            masked_phone = phone[:4] + '*' * (len(phone) - 7) + phone[-3:] if len(phone) > 7 else '***'
+            logger.info(f"[SMS TEST] To: {masked_phone} | Message length: {len(message)}")
 
             return DeliveryResult(
                 channel=self.channel,

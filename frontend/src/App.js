@@ -7,6 +7,7 @@ import './App.css';
 import HomePage from './components/HomePage';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
+import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import CustomerDashboard from './components/customer/CustomerDashboard';
 import SupplierDashboard from './components/supplier/SupplierDashboard';
 import ProductCatalog from './components/product/ProductCatalog';
@@ -16,6 +17,8 @@ import CheckoutPage from './components/checkout/CheckoutPage';
 import OrdersPage from './components/orders/OrdersPage';
 import ChatPage from './components/chat/ChatPage';
 import SuppliersPage from './components/suppliers/SuppliersPage';
+import TermsPage from './components/pages/TermsPage';
+import PrivacyPage from './components/pages/PrivacyPage';
 import Navigation from './components/layout/Navigation';
 import { ToastProvider } from './components/ui/toast';
 
@@ -181,6 +184,9 @@ function App() {
                   <Route path="/" element={<HomePage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+                  <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/products" element={<ProductCatalog />} />
                   <Route path="/products/:id" element={<ProductDetail />} />
                   <Route path="/suppliers" element={<SuppliersPage />} />

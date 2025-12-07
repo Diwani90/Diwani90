@@ -5,8 +5,11 @@ API الطلبات
 Django Ninja API لإدارة الطلبات
 """
 
+import logging
 from typing import List, Optional
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
@@ -173,8 +176,8 @@ def _calculate_eta(delivery):
                 eta = timezone.now() + timedelta(minutes=estimated_minutes)
                 return eta.isoformat()
 
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to calculate ETA from current location: {e}")
 
         # تقدير افتراضي: 30 دقيقة
         eta = timezone.now() + timedelta(minutes=30)

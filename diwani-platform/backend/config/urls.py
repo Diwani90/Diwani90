@@ -106,7 +106,77 @@ urlpatterns = [
         'version': '2.0.0',
         'platform': 'Diwani'
     })),
+
+    # Public Platform Stats - إحصائيات المنصة العامة
+    path('api/v1/platform/stats/', lambda r: _get_platform_stats(r)),
 ]
+
+
+def _get_platform_stats(request):
+    """إحصائيات المنصة العامة (بدون مصادقة)"""
+    from django.http import JsonResponse
+    from django.core.cache import cache
+    from django.db.models import Avg, Count
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # محاولة جلب من الكاش أولاً (صالح لساعة)
+    cache_key = 'platform_stats_v1'
+    stats = cache.get(cache_key)
+
+    if not stats:
+        try:
+            from apps.users.models import User, VendorProfile
+            from apps.products.models import Product
+            from apps.orders.models import Order
+
+            # حساب الإحصائيات الحقيقية
+            total_suppliers = VendorProfile.objects.filter(
+                is_verified=True
+            ).count() or 0
+
+            total_products = Product.objects.filter(
+                status='active'
+            ).count() or 0
+
+            total_orders = Order.objects.filter(
+                status__in=['delivered', 'completed']
+            ).count() or 0
+
+            total_users = User.objects.filter(
+                is_active=True
+            ).count() or 0
+
+            # متوسط التقييم
+            avg_rating = Order.objects.filter(
+                rating__isnull=False
+            ).aggregate(avg=Avg('rating'))['avg'] or 4.8
+
+            stats = {
+                'total_suppliers': total_suppliers,
+                'total_products': total_products,
+                'total_orders': total_orders,
+                'total_users': total_users,
+                'average_rating': round(float(avg_rating), 1),
+                'updated_at': timezone.now().isoformat(),
+            }
+
+            # حفظ في الكاش لمدة ساعة
+            cache.set(cache_key, stats, timeout=3600)
+
+        except Exception as e:
+            # في حالة خطأ، نعيد قيم افتراضية
+            stats = {
+                'total_suppliers': 0,
+                'total_products': 0,
+                'total_orders': 0,
+                'total_users': 0,
+                'average_rating': 0,
+                'updated_at': timezone.now().isoformat(),
+                'error': str(e) if request.GET.get('debug') else None,
+            }
+
+    return JsonResponse(stats)
 
 # ===================================
 # Development URLs

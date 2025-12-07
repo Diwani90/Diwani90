@@ -8,6 +8,7 @@ Django Ninja API للمصادقة وإدارة المستخدمين
 from typing import List, Optional
 from uuid import UUID
 
+from django.db import transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from ninja import Router, File, UploadedFile, Form
@@ -378,20 +379,25 @@ def delete_address(request: HttpRequest, address_id: UUID):
 @router.post('/me/addresses/{address_id}/default', response=MessageSchema, auth=JWTAuth(), tags=['العناوين'])
 def set_default_address(request: HttpRequest, address_id: UUID):
     """تعيين العنوان الافتراضي"""
-    address = get_object_or_404(
-        UserAddress,
-        id=address_id,
-        user=request.auth
-    )
+    # استخدام transaction لتجنب race conditions
+    with transaction.atomic():
+        # قفل الصفوف المتأثرة أثناء التحديث
+        address = UserAddress.objects.select_for_update().filter(
+            id=address_id,
+            user=request.auth
+        ).first()
 
-    # إلغاء العنوان الافتراضي السابق
-    UserAddress.objects.filter(
-        user=request.auth,
-        is_default=True
-    ).update(is_default=False)
+        if not address:
+            return {'message': 'العنوان غير موجود', 'success': False}
 
-    address.is_default = True
-    address.save(update_fields=['is_default'])
+        # إلغاء العنوان الافتراضي السابق مع القفل
+        UserAddress.objects.select_for_update().filter(
+            user=request.auth,
+            is_default=True
+        ).update(is_default=False)
+
+        address.is_default = True
+        address.save(update_fields=['is_default'])
 
     return {'message': 'تم تعيين العنوان الافتراضي', 'success': True}
 

@@ -38,8 +38,14 @@ from .models import (
 
 JWT_SECRET = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
 JWT_ALGORITHM = 'HS256'
-ACCESS_TOKEN_EXPIRE_MINUTES = 60  # ساعة
-REFRESH_TOKEN_EXPIRE_DAYS = 30  # شهر
+
+# قراءة إعدادات الانتهاء من NINJA_JWT في settings
+_ninja_jwt = getattr(settings, 'NINJA_JWT', {})
+_access_lifetime = _ninja_jwt.get('ACCESS_TOKEN_LIFETIME', timedelta(minutes=30))
+_refresh_lifetime = _ninja_jwt.get('REFRESH_TOKEN_LIFETIME', timedelta(days=7))
+
+ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_lifetime.total_seconds() / 60)  # محسوبة من settings
+REFRESH_TOKEN_EXPIRE_DAYS = int(_refresh_lifetime.total_seconds() / 86400)  # محسوبة من settings
 
 
 @dataclass
@@ -209,15 +215,13 @@ class OTPService:
         test_mode = sms_config.get('TEST_MODE', settings.DEBUG)
 
         if test_mode:
-            # حفظ الكود في cache للاختبار
+            # حفظ الكود في cache للاختبار - يمكن استرجاعه بـ cache key: test_otp:{phone}
             cache.set(f'test_otp:{phone_number}', code, timeout=600)
-            logger.info(f'[SMS TEST MODE] To: {phone_number} | Code: {code} | Purpose: {purpose}')
-            print(f'╔══════════════════════════════════════╗')
-            print(f'║ 📱 SMS TEST MODE                     ║')
-            print(f'║ Phone: {phone_number:<25} ║')
-            print(f'║ Code:  {code:<25} ║')
-            print(f'║ Purpose: {purpose:<23} ║')
-            print(f'╚══════════════════════════════════════╝')
+            # SECURITY: لا نطبع OTP في logs - نستخدم أقنعة للرقم
+            masked_phone = phone_number[:4] + '*' * (len(phone_number) - 7) + phone_number[-3:]
+            logger.info(f'[SMS TEST MODE] OTP sent to {masked_phone} for {purpose}')
+            # للتطوير المحلي: يمكن استرجاع الكود من Redis/cache
+            # python manage.py shell -> from django.core.cache import cache; cache.get('test_otp:+966...')
             return True
 
         # الإنتاج - إرسال فعلي
@@ -797,48 +801,29 @@ class AuthService:
 
     def _process_referral_bonus(self, referrer: User, new_user: User):
         """معالجة مكافأة الإحالة"""
+        import logging
+        logger = logging.getLogger(__name__)
+
         # إضافة نقاط للمُحيل
         bonus_points = 100  # يمكن جعلها قابلة للتكوين
         referrer.loyalty_points += bonus_points
         referrer.save(update_fields=['loyalty_points'])
 
-        # إرسال إشعار للمُحيل
+        # إرسال إشعار للمُحيل عبر Celery (بدون إنشاء event loop)
         try:
-            from apps.notifications.services import notification_service
-            import asyncio
+            from apps.notifications.tasks import send_referral_bonus_notification_task
 
-            notification_data = {
-                'type': 'referral_bonus',
-                'title': 'مكافأة إحالة! 🎉',
-                'body': f'تهانينا! لقد حصلت على {bonus_points} نقطة مكافأة لأن صديقك {new_user.first_name or "مستخدم جديد"} انضم للمنصة باستخدام رمز الإحالة الخاص بك.',
-                'data': {
-                    'type': 'referral_bonus',
-                    'bonus_points': bonus_points,
-                    'new_user_name': new_user.first_name or 'مستخدم جديد',
-                    'total_points': referrer.loyalty_points,
-                    'action': 'view_rewards',
-                },
-                'channels': ['push', 'sms'],
-                'priority': 'normal',
-            }
-
-            # إرسال الإشعار بشكل غير متزامن
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(
-                    notification_service.send_to_user(
-                        user_id=str(referrer.id),
-                        **notification_data
-                    )
-                )
-            finally:
-                loop.close()
+            # إرسال المهمة بشكل غير متزامن عبر Celery
+            send_referral_bonus_notification_task.delay(
+                referrer_id=str(referrer.id),
+                new_user_name=new_user.first_name or 'مستخدم جديد',
+                bonus_points=bonus_points,
+                total_points=referrer.loyalty_points,
+            )
+            logger.info(f"Referral bonus notification queued for user {referrer.id}")
 
         except Exception as e:
             # تسجيل الخطأ ولكن لا نفشل العملية
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(f"فشل إرسال إشعار الإحالة: {e}")
 
 
