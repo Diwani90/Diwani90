@@ -57,6 +57,9 @@ pytz
 shortuuid
 python-slugify
 
+# HTTP Client
+requests
+
 # Real-time & WebSockets
 channels
 channels-redis
