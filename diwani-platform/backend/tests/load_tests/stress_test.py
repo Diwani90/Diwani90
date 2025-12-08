@@ -223,7 +223,7 @@ class TestScenarios:
         terms = ['أسمنت', 'حديد', 'رمل', 'طوب', 'جبس', 'خرسانة', 'بلاط']
         term = random.choice(terms)
         encoded_term = urllib.parse.quote(term)
-        return self.client.get(f'/api/v1/search/search?q={encoded_term}')
+        return self.client.get(f'/api/v1/search/products?q={encoded_term}')
 
     def browse_stores(self) -> RequestResult:
         """تصفح المتاجر"""

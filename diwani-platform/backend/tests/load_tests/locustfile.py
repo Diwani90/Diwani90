@@ -13,6 +13,7 @@
 
 import json
 import random
+import urllib.parse
 from locust import HttpUser, task, between, events
 from locust.runners import MasterRunner
 
@@ -84,7 +85,8 @@ class CustomerUser(HttpUser):
         """البحث عن منتجات"""
         search_terms = ['أسمنت', 'حديد', 'رمل', 'طوب', 'جبس']
         term = random.choice(search_terms)
-        self.client.get(f'/api/v1/search/search?q={term}')
+        encoded_term = urllib.parse.quote(term)
+        self.client.get(f'/api/v1/search/products?q={encoded_term}')
 
     @task(3)
     def view_product_detail(self):
