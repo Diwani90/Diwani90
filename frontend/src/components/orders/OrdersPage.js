@@ -27,8 +27,10 @@ const OrdersPage = () => {
 
   const fetchOrders = async () => {
     try {
-      const response = await axios.get('/orders');
-      setOrders(response.data);
+      // Use different endpoints based on user role
+      const endpoint = user?.role === 'supplier' ? '/orders/vendor/orders' : '/orders/orders';
+      const response = await axios.get(endpoint);
+      setOrders(response.data?.items || response.data || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast.error('خطأ', 'حدث خطأ في تحميل الطلبات');
@@ -39,9 +41,10 @@ const OrdersPage = () => {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     setUpdatingStatus(prev => ({ ...prev, [orderId]: true }));
-    
+
     try {
-      await axios.put(`/orders/${orderId}/status`, { status: newStatus });
+      // Use vendor endpoint to update order status
+      await axios.post(`/orders/vendor/orders/${orderId}/status`, { status: newStatus });
       
       setOrders(prev => 
         prev.map(order => 

@@ -29,14 +29,21 @@ const SupplierDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const [statsResponse, ordersResponse, productsResponse] = await Promise.all([
-        axios.get('/dashboard/stats'),
-        axios.get('/orders?limit=5'),
-        axios.get(`/products?supplier_id=${user.id}&limit=10`)
+        axios.get('/stores/vendor/store/stats'),
+        axios.get('/orders/vendor/orders?limit=5'),
+        axios.get('/products/vendor/products?limit=10')
       ]);
-      
-      setStats(statsResponse.data);
-      setRecentOrders(ordersResponse.data);
-      setProducts(productsResponse.data);
+
+      // Map store stats to expected format
+      const storeStats = statsResponse.data;
+      setStats({
+        total_products: storeStats.products?.total || 0,
+        total_orders: storeStats.orders?.total || 0,
+        pending_orders: storeStats.orders?.pending || 0,
+        total_revenue: storeStats.sales?.total || 0
+      });
+      setRecentOrders(ordersResponse.data?.items || ordersResponse.data || []);
+      setProducts(productsResponse.data?.items || productsResponse.data || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       toast.error('خطأ', 'حدث خطأ في تحميل بيانات لوحة التحكم');

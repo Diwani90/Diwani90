@@ -30,7 +30,7 @@ const CheckoutPage = () => {
 
   const fetchCart = async () => {
     try {
-      const response = await axios.get('/cart');
+      const response = await axios.get('/orders/cart');
       const items = response.data.items || [];
       
       if (items.length === 0) {
@@ -109,7 +109,7 @@ const CheckoutPage = () => {
           delivery_notes: orderData.delivery_notes
         };
         
-        const response = await axios.post('/orders', orderPayload);
+        const response = await axios.post('/orders/orders', orderPayload);
         createdOrders.push(response.data);
       }
       

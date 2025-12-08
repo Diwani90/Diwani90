@@ -7,8 +7,11 @@ import './App.css';
 import HomePage from './components/HomePage';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
+import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import CustomerDashboard from './components/customer/CustomerDashboard';
 import SupplierDashboard from './components/supplier/SupplierDashboard';
+import DriverDashboard from './components/driver/DriverDashboard';
+import AdminDashboard from './components/admin/AdminDashboard';
 import ProductCatalog from './components/product/ProductCatalog';
 import ProductDetail from './components/product/ProductDetail';
 import CartPage from './components/cart/CartPage';
@@ -16,11 +19,13 @@ import CheckoutPage from './components/checkout/CheckoutPage';
 import OrdersPage from './components/orders/OrdersPage';
 import ChatPage from './components/chat/ChatPage';
 import SuppliersPage from './components/suppliers/SuppliersPage';
+import TermsPage from './components/pages/TermsPage';
+import PrivacyPage from './components/pages/PrivacyPage';
 import Navigation from './components/layout/Navigation';
 import { ToastProvider } from './components/ui/toast';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const API = `${BACKEND_URL}/api/v1`;
 
 // Configure axios defaults
 axios.defaults.baseURL = API;
@@ -91,17 +96,23 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: 'LOAD_USER' });
   }, []);
 
-  const login = async (credentials) => {
+  const login = async (authData) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/auth/login', credentials);
+      // إذا كانت البيانات تحتوي على token مباشرة (من صفحة تسجيل الدخول الجديدة)
+      if (authData.access_token) {
+        dispatch({ type: 'LOGIN_SUCCESS', payload: authData });
+        return { success: true };
+      }
+      // للتوافق مع الطريقة القديمة (إذا احتجنا)
+      const response = await axios.post('/users/auth/login', authData);
       dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
       return { success: true };
     } catch (error) {
       dispatch({ type: 'SET_LOADING', payload: false });
-      return { 
-        success: false, 
-        error: error.response?.data?.detail || 'حدث خطأ في تسجيل الدخول' 
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'حدث خطأ في تسجيل الدخول'
       };
     }
   };
@@ -109,7 +120,9 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/auth/register', userData);
+      // Note: Registration is now handled directly in RegisterPage with phone+OTP
+      // This is kept for legacy compatibility
+      const response = await axios.post('/users/auth/register/customer', userData);
       dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
       return { success: true };
     } catch (error) {
@@ -181,6 +194,9 @@ function App() {
                   <Route path="/" element={<HomePage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+                  <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/products" element={<ProductCatalog />} />
                   <Route path="/products/:id" element={<ProductDetail />} />
                   <Route path="/suppliers" element={<SuppliersPage />} />
@@ -213,7 +229,51 @@ function App() {
                       <SupplierDashboard />
                     </ProtectedRoute>
                   } />
-                  
+
+                  {/* Driver Routes */}
+                  <Route path="/driver/dashboard" element={
+                    <ProtectedRoute allowedRoles={['driver']}>
+                      <DriverDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/driver/history" element={
+                    <ProtectedRoute allowedRoles={['driver']}>
+                      <DriverDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/driver/earnings" element={
+                    <ProtectedRoute allowedRoles={['driver']}>
+                      <DriverDashboard />
+                    </ProtectedRoute>
+                  } />
+
+                  {/* Admin Routes */}
+                  <Route path="/admin/dashboard" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/users" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/vendors" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/orders" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/finance" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } />
+
                   {/* Chat */}
                   <Route path="/chat" element={
                     <ProtectedRoute>
@@ -245,11 +305,15 @@ function App() {
 // Component to redirect to appropriate dashboard
 const DashboardRedirect = () => {
   const { user } = useAuth();
-  
-  if (user.role === 'customer') {
+
+  if (user.role === 'admin') {
+    return <Navigate to="/admin/dashboard" replace />;
+  } else if (user.role === 'customer') {
     return <Navigate to="/customer/dashboard" replace />;
-  } else if (user.role === 'supplier') {
+  } else if (user.role === 'supplier' || user.role === 'vendor') {
     return <Navigate to="/supplier/dashboard" replace />;
+  } else if (user.role === 'driver') {
+    return <Navigate to="/driver/dashboard" replace />;
   } else {
     return <Navigate to="/" replace />;
   }

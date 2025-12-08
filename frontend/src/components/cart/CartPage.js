@@ -26,7 +26,7 @@ const CartPage = () => {
 
   const fetchCart = async () => {
     try {
-      const response = await axios.get('/cart');
+      const response = await axios.get('/orders/cart');
       setCartItems(response.data.items || []);
     } catch (error) {
       console.error('Error fetching cart:', error);
@@ -47,15 +47,10 @@ const CartPage = () => {
     try {
       // Note: This would require an update cart endpoint in the backend
       // For now, we'll remove and re-add
-      await axios.delete(`/cart/${itemId}`);
-      
-      const item = cartItems.find(item => item.cart_item.id === itemId);
-      if (item) {
-        await axios.post('/cart/add', {
-          product_id: item.product.id,
-          quantity: newQuantity
-        });
-      }
+      // Use PUT to update quantity directly
+      await axios.put(`/orders/cart/${itemId}`, null, {
+        params: { quantity: newQuantity }
+      });
       
       await fetchCart();
       toast.success('تم التحديث', 'تم تحديث كمية المنتج');
@@ -69,7 +64,7 @@ const CartPage = () => {
 
   const removeItem = async (itemId) => {
     try {
-      await axios.delete(`/cart/${itemId}`);
+      await axios.delete(`/orders/cart/${itemId}`);
       setCartItems(prev => prev.filter(item => item.cart_item.id !== itemId));
       toast.success('تم الحذف', 'تم حذف المنتج من السلة');
     } catch (error) {

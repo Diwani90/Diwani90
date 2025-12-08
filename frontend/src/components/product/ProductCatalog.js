@@ -54,8 +54,8 @@ const ProductCatalog = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('/categories');
-      setCategories(response.data.categories);
+      const response = await axios.get('/products/categories');
+      setCategories(response.data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -76,15 +76,18 @@ const ProductCatalog = () => {
         queryParams.skip = 0;
       }
 
-      const response = await axios.get('/products', { params: queryParams });
-      
+      const response = await axios.get('/products/products', { params: queryParams });
+
+      // Handle paginated response from backend
+      const productsList = response.data?.items || response.data || [];
+
       if (reset) {
-        setProducts(response.data);
+        setProducts(productsList);
       } else {
-        setProducts(prev => [...prev, ...response.data]);
+        setProducts(prev => [...prev, ...productsList]);
       }
-      
-      setHasMore(response.data.length === filters.limit);
+
+      setHasMore(productsList.length === filters.limit);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('خطأ', 'حدث خطأ في تحميل المنتجات');
@@ -123,9 +126,11 @@ const ProductCatalog = () => {
     }
 
     try {
-      await axios.post('/cart/add', {
-        product_id: productId,
-        quantity: 1
+      await axios.post('/orders/cart/add', null, {
+        params: {
+          product_id: productId,
+          quantity: 1
+        }
       });
       toast.success('تم بنجاح', 'تم إضافة المنتج للسلة');
     } catch (error) {

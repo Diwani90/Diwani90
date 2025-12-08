@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../App';
 import { useToast } from '../ui/toast';
 import axios from 'axios';
@@ -12,9 +12,11 @@ import {
 
 const ChatPage = () => {
   const { conversationId } = useParams();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -22,9 +24,19 @@ const ChatPage = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
+  // معالجة معامل with لبدء محادثة جديدة
+  const withUserId = searchParams.get('with');
+
   useEffect(() => {
     fetchConversations();
   }, []);
+
+  // بدء محادثة جديدة إذا وجد معامل with
+  useEffect(() => {
+    if (withUserId && !loading) {
+      startNewConversation(parseInt(withUserId));
+    }
+  }, [withUserId, loading]);
 
   useEffect(() => {
     if (conversationId) {
@@ -35,6 +47,37 @@ const ChatPage = () => {
       }
     }
   }, [conversationId, conversations]);
+
+  const startNewConversation = async (userId) => {
+    try {
+      const response = await axios.post('/chat/start', null, {
+        params: { user_id: userId }
+      });
+
+      if (response.data.success) {
+        // إضافة المحادثة للقائمة إذا لم تكن موجودة
+        const existingConv = conversations.find(c => c.conversation_id === response.data.conversation_id);
+        if (!existingConv) {
+          const newConv = {
+            conversation_id: response.data.conversation_id,
+            other_user: response.data.other_user,
+            unread_count: response.data.unread_count,
+            last_message: null,
+          };
+          setConversations(prev => [newConv, ...prev]);
+          setSelectedConversation(newConv);
+        } else {
+          setSelectedConversation(existingConv);
+        }
+
+        // إزالة معامل with من الـ URL
+        navigate('/chat', { replace: true });
+      }
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      toast.error('خطأ', 'حدث خطأ في بدء المحادثة');
+    }
+  };
 
   const fetchConversations = async () => {
     try {

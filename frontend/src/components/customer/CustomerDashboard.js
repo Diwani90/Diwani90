@@ -26,12 +26,12 @@ const CustomerDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const [statsResponse, ordersResponse] = await Promise.all([
-        axios.get('/dashboard/stats'),
-        axios.get('/orders?limit=5')
+        axios.get('/users/me/stats'),
+        axios.get('/orders/orders?limit=5')
       ]);
-      
-      setStats(statsResponse.data);
-      setRecentOrders(ordersResponse.data);
+
+      setStats(statsResponse.data || {});
+      setRecentOrders(ordersResponse.data?.items || ordersResponse.data || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       toast.error('خطأ', 'حدث خطأ في تحميل بيانات لوحة التحكم');

@@ -1,0 +1,79 @@
+# ===================================
+# منصة ديواني - المتطلبات التقنية
+# Diwani Platform - Requirements
+# ===================================
+
+# Django Core
+Django
+django-environ
+django-cors-headers
+django-filter
+django-extensions
+
+# Django Ninja API
+django-ninja
+django-ninja-extra
+django-ninja-jwt
+pydantic
+email-validator
+
+# Database
+psycopg2-binary
+dj-database-url
+django-redis
+redis
+
+# Authentication & Security
+PyJWT
+python-jose
+argon2-cffi
+django-otp
+phonenumbers
+
+# Security
+django-csp
+django-ratelimit
+django-axes
+django-cryptography
+cryptography
+bleach
+python-ipware
+django-permissions-policy
+
+# Background Tasks
+celery
+django-celery-beat
+django-celery-results
+
+# File & Media
+Pillow
+python-magic
+django-storages
+boto3
+
+# Utilities
+python-dateutil
+pytz
+shortuuid
+python-slugify
+
+# HTTP Client
+requests
+
+# Real-time & WebSockets
+channels
+channels-redis
+daphne
+
+# Search Engine
+elasticsearch
+elasticsearch-dsl
+
+# Monitoring & Logging
+sentry-sdk
+structlog
+python-json-logger
+
+# Production Server
+gunicorn
+whitenoise
