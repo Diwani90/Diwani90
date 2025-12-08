@@ -115,7 +115,9 @@ const Navigation = () => {
                   <UserCircleIcon className="h-6 w-6" />
                   <span className="font-medium">{user?.full_name}</span>
                   <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    {user?.role === 'customer' ? 'عميل' : user?.role === 'supplier' ? 'مورد' : 'إدارة'}
+                    {user?.role === 'customer' ? 'عميل' :
+                     user?.role === 'supplier' || user?.role === 'vendor' ? 'مورد' :
+                     user?.role === 'driver' ? 'سائق' : 'إدارة'}
                   </span>
                 </div>
                 <button
@@ -197,7 +199,9 @@ const Navigation = () => {
                     <div>
                       <span className="font-medium block">{user?.full_name}</span>
                       <span className="text-xs text-gray-500">
-                        {user?.role === 'customer' ? 'عميل' : user?.role === 'supplier' ? 'مورد' : 'إدارة'}
+                        {user?.role === 'customer' ? 'عميل' :
+                         user?.role === 'supplier' || user?.role === 'vendor' ? 'مورد' :
+                         user?.role === 'driver' ? 'سائق' : 'إدارة'}
                       </span>
                     </div>
                   </div>
