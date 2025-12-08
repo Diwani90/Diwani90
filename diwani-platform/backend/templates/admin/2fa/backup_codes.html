@@ -1,0 +1,85 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}الرموز الاحتياطية{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 50px auto; padding: 20px;">
+    <h1 style="color: #333;">🔑 الرموز الاحتياطية</h1>
+
+    <div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <strong>⚠️ مهم جداً!</strong>
+        <p>احفظ هذه الرموز في مكان آمن. يمكنك استخدامها للدخول إذا فقدت الوصول لتطبيق المصادقة.</p>
+        <p><strong>هذه الرموز تُعرض مرة واحدة فقط!</strong></p>
+    </div>
+
+    <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+        <h3 style="margin-top: 0;">الرموز الاحتياطية (10 رموز):</h3>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-family: monospace; font-size: 18px;">
+            {% for code in backup_codes %}
+            <div style="background: white; padding: 10px; border: 1px solid #ddd; text-align: center;">
+                {{ code }}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div style="margin: 20px 0;">
+        <button onclick="copyBackupCodes()"
+                style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+            📋 نسخ الرموز
+        </button>
+        <button onclick="printBackupCodes()"
+                style="background: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+            🖨️ طباعة
+        </button>
+    </div>
+
+    <hr style="margin: 30px 0;">
+
+    <h3>تعليمات الاستخدام:</h3>
+    <ol style="line-height: 2;">
+        <li>كل رمز يُستخدم مرة واحدة فقط</li>
+        <li>عند استخدام رمز، يتم إلغاؤه تلقائياً</li>
+        <li>احفظ الرموز في مكان آمن (مدير كلمات مرور)</li>
+        <li>لا تشارك هذه الرموز مع أي شخص</li>
+        <li>يمكنك توليد رموز جديدة في أي وقت (تُلغى القديمة)</li>
+    </ol>
+
+    <p style="margin-top: 30px;">
+        <a href="{% url 'admin:setup_2fa' %}" class="button" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            ← العودة لإعدادات 2FA
+        </a>
+    </p>
+</div>
+
+<script>
+function copyBackupCodes() {
+    const codes = [{% for code in backup_codes %}"{{ code }}"{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const text = "رموز ديواني الاحتياطية:\n\n" + codes.join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+        alert("✅ تم نسخ الرموز!");
+    });
+}
+
+function printBackupCodes() {
+    window.print();
+}
+</script>
+
+<style>
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    #content, #content * {
+        visibility: visible;
+    }
+    #content {
+        position: absolute;
+        left: 0;
+        top: 0;
+    }
+}
+</style>
+{% endblock %}

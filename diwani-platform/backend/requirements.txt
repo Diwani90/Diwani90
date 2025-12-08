@@ -40,6 +40,11 @@ bleach
 python-ipware
 django-permissions-policy
 
+# ZATCA E-Invoicing
+qrcode[pil]
+lxml
+Pillow
+
 # Background Tasks
 celery
 django-celery-beat

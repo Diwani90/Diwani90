@@ -1,0 +1,95 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}إعداد المصادقة الثنائية{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h1 style="color: #333;">🔐 إعداد المصادقة الثنائية (2FA)</h1>
+
+    {% if has_2fa %}
+    <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        <strong>✅ المصادقة الثنائية مفعّلة</strong>
+        <p>حسابك محمي بالمصادقة الثنائية</p>
+    </div>
+
+    <h3>الأجهزة المسجلة:</h3>
+    <ul>
+        {% for device in devices %}
+        <li>{{ device.name }} - مسجل منذ {{ device.created_date|default:"غير معروف" }}</li>
+        {% endfor %}
+    </ul>
+
+    <p style="margin-top: 20px;">
+        <a href="{% url 'admin:disable_2fa' %}" class="button" style="background: #dc3545;">
+            تعطيل 2FA
+        </a>
+        <a href="{% url 'admin:backup_codes' %}" class="button" style="background: #17a2b8;">
+            توليد رموز احتياطية
+        </a>
+    </p>
+
+    {% else %}
+    <div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        <strong>⚠️ تحذير أمني</strong>
+        <p>يُنصح بشدة بتفعيل المصادقة الثنائية لحماية حسابك</p>
+    </div>
+
+    {% if qr_url %}
+    <div style="text-align: center; margin: 30px 0;">
+        <h3>1. امسح رمز QR بتطبيق المصادقة:</h3>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={{ qr_url|urlencode }}"
+             alt="QR Code"
+             style="border: 1px solid #ddd; padding: 10px; background: white;">
+
+        <p style="margin-top: 15px; color: #666;">
+            أو أدخل هذا المفتاح يدوياً:
+        </p>
+        <code style="background: #f8f9fa; padding: 10px; display: block; margin: 10px 0; font-size: 14px;">
+            {{ secret_key }}
+        </code>
+    </div>
+
+    <form method="post" action="{% url 'admin:verify_2fa' %}" style="margin-top: 30px;">
+        {% csrf_token %}
+        <h3>2. أدخل الرمز من التطبيق للتأكيد:</h3>
+        <input type="text"
+               name="token"
+               placeholder="123456"
+               maxlength="6"
+               pattern="[0-9]{6}"
+               required
+               style="width: 200px; padding: 15px; font-size: 24px; text-align: center; letter-spacing: 5px;">
+        <br><br>
+        <button type="submit" class="default" style="padding: 10px 30px;">
+            تأكيد وتفعيل 2FA
+        </button>
+    </form>
+
+    {% else %}
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="default" style="padding: 15px 30px; font-size: 16px;">
+            بدء إعداد 2FA
+        </button>
+    </form>
+    {% endif %}
+    {% endif %}
+
+    <hr style="margin: 30px 0;">
+    <p>
+        <a href="{% url 'admin:index' %}">← العودة للوحة التحكم</a>
+    </p>
+</div>
+
+<style>
+    .button {
+        display: inline-block;
+        padding: 10px 20px;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        margin: 5px;
+    }
+</style>
+{% endblock %}

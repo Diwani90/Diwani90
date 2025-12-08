@@ -1,0 +1,44 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}تعطيل المصادقة الثنائية{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 50px auto; padding: 20px;">
+    <h1 style="color: #dc3545;">⚠️ تعطيل المصادقة الثنائية</h1>
+
+    <div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <strong>تحذير!</strong>
+        <p>تعطيل المصادقة الثنائية سيجعل حسابك أقل أماناً.</p>
+        <p>لن تحتاج لرمز التحقق عند الدخول، لكن حسابك سيكون عرضة للاختراق إذا تم تسريب كلمة المرور.</p>
+    </div>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div style="background: {% if message.tags == 'error' %}#f8d7da{% else %}#d4edda{% endif %};
+                padding: 10px; border-radius: 5px; margin-bottom: 20px;">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <p>للتأكيد، أدخل كلمة المرور الخاصة بك:</p>
+        <input type="password"
+               name="password"
+               placeholder="كلمة المرور"
+               required
+               style="width: 100%; padding: 15px; font-size: 16px; margin: 10px 0;">
+        <br><br>
+        <button type="submit"
+                style="background: #dc3545; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer;">
+            تأكيد التعطيل
+        </button>
+        <a href="{% url 'admin:setup_2fa' %}"
+           style="display: inline-block; padding: 15px 30px; color: #666; text-decoration: none;">
+            إلغاء
+        </a>
+    </form>
+</div>
+{% endblock %}

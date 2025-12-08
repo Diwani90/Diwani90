@@ -52,6 +52,10 @@ THIRD_PARTY_APPS = [
     'django_celery_beat',
     'django_celery_results',
     'channels',  # WebSockets
+    # 2FA for Admin
+    'django_otp',
+    'django_otp.plugins.otp_totp',
+    'django_otp.plugins.otp_static',
 ]
 
 LOCAL_APPS = [
@@ -88,6 +92,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',  # 2FA Middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Error Handling (Last Layer)

@@ -1,0 +1,118 @@
+# ===================================
+# منصة ديواني - Prometheus Configuration
+# Diwani Platform - Metrics Collection
+# ===================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'diwani-platform'
+    environment: 'production'
+
+# =============================
+# Alerting Configuration
+# =============================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# =============================
+# Rule Files
+# =============================
+rule_files:
+  # - "alerts/*.yml"
+
+# =============================
+# Scrape Configurations
+# =============================
+scrape_configs:
+  # =============================
+  # Prometheus Self-Monitoring
+  # =============================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+    scheme: http
+
+  # =============================
+  # Django Application Metrics
+  # =============================
+  - job_name: 'django'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: /metrics
+    scheme: http
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # =============================
+  # Celery Worker Metrics
+  # =============================
+  - job_name: 'celery'
+    static_configs:
+      - targets: ['celery_worker:8000']
+    metrics_path: /metrics
+    scheme: http
+    scrape_interval: 30s
+
+  # =============================
+  # Flower (Celery Monitoring)
+  # =============================
+  - job_name: 'flower'
+    static_configs:
+      - targets: ['flower:5555']
+    metrics_path: /metrics
+    scheme: http
+    basic_auth:
+      username: '${FLOWER_USER}'
+      password: '${FLOWER_PASSWORD}'
+
+  # =============================
+  # Redis Metrics
+  # =============================
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: /metrics
+    scheme: http
+
+  # =============================
+  # PostgreSQL Metrics
+  # =============================
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['db:5432']
+    metrics_path: /metrics
+    scheme: http
+
+  # =============================
+  # Elasticsearch Metrics
+  # =============================
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+    metrics_path: /_prometheus/metrics
+    scheme: http
+    basic_auth:
+      username: 'elastic'
+      password: '${ELASTICSEARCH_PASSWORD}'
+
+  # =============================
+  # Nginx Metrics
+  # =============================
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: /metrics
+    scheme: http
+
+  # =============================
+  # Node Exporter (Host Metrics)
+  # =============================
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']

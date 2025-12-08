@@ -1,0 +1,54 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}التحقق من رمز 2FA{% endblock %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 50px auto; padding: 20px; text-align: center;">
+    <h1 style="color: #333;">🔐 التحقق من الهوية</h1>
+
+    <p style="color: #666; margin: 20px 0;">
+        أدخل الرمز من تطبيق المصادقة الخاص بك
+    </p>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div style="background: {% if message.tags == 'error' %}#f8d7da{% else %}#d4edda{% endif %};
+                padding: 10px; border-radius: 5px; margin-bottom: 20px;">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <input type="text"
+               name="token"
+               placeholder="000000"
+               maxlength="6"
+               pattern="[0-9]{6}"
+               required
+               autofocus
+               autocomplete="off"
+               style="width: 100%;
+                      padding: 20px;
+                      font-size: 32px;
+                      text-align: center;
+                      letter-spacing: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 5px;
+                      margin: 20px 0;">
+        <br>
+        <button type="submit"
+                class="default"
+                style="width: 100%; padding: 15px; font-size: 18px;">
+            تأكيد
+        </button>
+    </form>
+
+    <p style="margin-top: 30px; color: #999; font-size: 14px;">
+        فقدت الوصول لتطبيق المصادقة؟<br>
+        <a href="mailto:support@diwani.sa">تواصل مع الدعم الفني</a>
+    </p>
+</div>
+{% endblock %}

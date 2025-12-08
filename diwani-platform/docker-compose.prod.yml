@@ -1,0 +1,589 @@
+# ===================================
+# منصة ديواني - Docker Compose Production
+# Diwani Platform - Production Environment
+# ===================================
+#
+# الاستخدام:
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# المتطلبات:
+#   - Docker Swarm أو Kubernetes للـ High Availability
+#   - شهادات SSL في ./docker/ssl/
+#   - ملف .env.prod مع الأسرار الحقيقية
+# ===================================
+
+services:
+  # =============================
+  # PostgreSQL Database + PostGIS
+  # Primary with Replication Ready
+  # =============================
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: diwani_db_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backups/postgres:/backups
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=ar_SA.UTF-8"
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=16MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c log_statement=mod
+      -c log_min_duration_statement=1000
+      -c archive_mode=on
+      -c archive_command='cp %p /backups/wal/%f'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =============================
+  # Redis Cluster (Cache & Celery)
+  # =============================
+  redis:
+    image: redis:7.4-alpine
+    container_name: diwani_redis_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 768mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
+      --tcp-backlog 511
+      --timeout 0
+      --tcp-keepalive 300
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # =============================
+  # Django Backend Application
+  # =============================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: diwani_backend_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             python manage.py setup_elasticsearch --no-data || true &&
+             gunicorn config.wsgi:application
+             --bind 0.0.0.0:8000
+             --workers ${GUNICORN_WORKERS:-4}
+             --threads ${GUNICORN_THREADS:-2}
+             --worker-class gthread
+             --worker-tmp-dir /dev/shm
+             --timeout 120
+             --graceful-timeout 30
+             --keep-alive 5
+             --max-requests 10000
+             --max-requests-jitter 1000
+             --access-logfile -
+             --error-logfile -
+             --capture-output
+             --enable-stdio-inheritance"
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+      - ./logs/backend:/app/logs
+    expose:
+      - "8000"
+    env_file:
+      - .env.prod
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - DATABASE_URL=postgis://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+  # =============================
+  # Daphne (WebSocket Server)
+  # =============================
+  websocket:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: diwani_websocket_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    command: >
+      daphne -b 0.0.0.0 -p 8001
+      --access-log -
+      --proxy-headers
+      config.asgi:application
+    expose:
+      - "8001"
+    env_file:
+      - .env.prod
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - DATABASE_URL=postgis://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =============================
+  # Celery Worker (Background Tasks)
+  # =============================
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: diwani_celery_worker_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    command: >
+      celery -A config worker
+      -l INFO
+      --concurrency=${CELERY_CONCURRENCY:-4}
+      --max-tasks-per-child=1000
+      --prefetch-multiplier=4
+      -Q default,high_priority,low_priority,payments,notifications
+      --without-gossip
+      --without-mingle
+    volumes:
+      - ./logs/celery:/app/logs
+    env_file:
+      - .env.prod
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - DATABASE_URL=postgis://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+    depends_on:
+      - backend
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+  # =============================
+  # Celery Beat (Scheduled Tasks)
+  # =============================
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: diwani_celery_beat_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    command: >
+      celery -A config beat
+      -l INFO
+      --scheduler django_celery_beat.schedulers:DatabaseScheduler
+      --pidfile=/tmp/celerybeat.pid
+    volumes:
+      - ./logs/celery:/app/logs
+    env_file:
+      - .env.prod
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - DATABASE_URL=postgis://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # =============================
+  # Flower (Celery Monitoring)
+  # Protected with Basic Auth
+  # =============================
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: diwani_flower_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    command: >
+      celery -A config flower
+      --port=5555
+      --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD}
+      --url_prefix=flower
+      --persistent=True
+      --db=/app/flower.db
+      --max_tasks=10000
+    volumes:
+      - flower_data:/app
+    expose:
+      - "5555"
+    env_file:
+      - .env.prod
+    environment:
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+    depends_on:
+      - celery_worker
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # =============================
+  # Elasticsearch (Advanced Search)
+  # =============================
+  elasticsearch:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.elasticsearch
+    container_name: diwani_elasticsearch_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    environment:
+      - node.name=diwani-es01
+      - cluster.name=diwani-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.authc.api_key.enabled=true
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD}
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./backups/elasticsearch:/usr/share/elasticsearch/backup
+    expose:
+      - "9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTICSEARCH_PASSWORD} http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=30s || exit 1"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+  # =============================
+  # Nginx (Reverse Proxy + SSL)
+  # =============================
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: diwani_nginx_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    volumes:
+      - ./docker/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+      - static_volume:/app/static:ro
+      - media_volume:/app/media:ro
+      - ./logs/nginx:/var/log/nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - websocket
+    networks:
+      - diwani_internal
+      - diwani_external
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+  # =============================
+  # PostgreSQL Backup Service
+  # =============================
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    container_name: diwani_backup_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    volumes:
+      - ./backups/postgres:/backups
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_EXTRA_OPTS=-Z9 --schema=public --blobs
+      - SCHEDULE=@daily
+      - BACKUP_KEEP_DAYS=7
+      - BACKUP_KEEP_WEEKS=4
+      - BACKUP_KEEP_MONTHS=6
+      - HEALTHCHECK_PORT=8080
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =============================
+  # Prometheus (Metrics)
+  # =============================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: diwani_prometheus_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    expose:
+      - "9090"
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # =============================
+  # Grafana (Dashboards)
+  # =============================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: diwani_grafana_prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://${DOMAIN}/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    expose:
+      - "3000"
+    depends_on:
+      - prometheus
+    networks:
+      - diwani_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+# =============================
+# Volumes
+# =============================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  flower_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# =============================
+# Networks
+# =============================
+networks:
+  diwani_internal:
+    driver: bridge
+    internal: true
+  diwani_external:
+    driver: bridge
