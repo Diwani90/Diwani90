@@ -49,6 +49,7 @@ class TestResults:
     response_times: List[float] = field(default_factory=list)
     errors: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     endpoint_stats: Dict[str, List[float]] = field(default_factory=lambda: defaultdict(list))
+    endpoint_errors: Dict[str, Dict[str, int]] = field(default_factory=lambda: defaultdict(lambda: defaultdict(int)))
     start_time: float = 0
     end_time: float = 0
 
@@ -60,6 +61,9 @@ class TestResults:
             self.failed_requests += 1
             if result.error:
                 self.errors[result.error] += 1
+                # تتبع الأخطاء حسب الـ endpoint
+                base_endpoint = result.endpoint.split('?')[0]  # إزالة query params
+                self.endpoint_errors[base_endpoint][result.error] += 1
 
         self.response_times.append(result.response_time)
         self.endpoint_stats[result.endpoint].append(result.response_time)
@@ -336,6 +340,14 @@ class StressTestRunner:
             print(f"\nالأخطاء:")
             for error, count in sorted(r.errors.items(), key=lambda x: -x[1]):
                 print(f"  - {error}: {count} مرة")
+
+        if r.endpoint_errors:
+            print(f"\nالأخطاء حسب الـ Endpoint:")
+            for endpoint, errors in sorted(r.endpoint_errors.items()):
+                total_errors = sum(errors.values())
+                print(f"  {endpoint}: {total_errors} خطأ")
+                for error, count in sorted(errors.items(), key=lambda x: -x[1]):
+                    print(f"    - {error}: {count}")
 
         # تقييم الأداء
         print(f"\n{'='*60}")
