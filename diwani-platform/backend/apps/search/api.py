@@ -23,6 +23,7 @@ from ninja.errors import HttpError
 from django.http import HttpRequest
 from django.core.cache import cache
 from django.conf import settings
+from django.db.models import Q
 
 from .schemas import (
     SearchRequestSchema,
@@ -228,6 +229,112 @@ def format_facets(facets) -> List[FacetGroupSchema]:
 
 
 # ===================================
+# Database Fallback Search
+# ===================================
+def db_fallback_search_products(
+    q: str,
+    category_ids: List[int] = None,
+    price_min: float = None,
+    price_max: float = None,
+    in_stock: bool = None,
+    page: int = 1,
+    page_size: int = 20,
+):
+    """
+    بحث بديل في قاعدة البيانات عند فشل Elasticsearch
+    """
+    from apps.products.models import Product, ProductStatus
+
+    queryset = Product.objects.filter(status=ProductStatus.ACTIVE)
+
+    # البحث النصي
+    if q:
+        queryset = queryset.filter(
+            Q(name__icontains=q) |
+            Q(name_en__icontains=q) |
+            Q(description__icontains=q) |
+            Q(sku__icontains=q)
+        )
+
+    # فلتر التصنيف
+    if category_ids:
+        queryset = queryset.filter(category_id__in=category_ids)
+
+    # فلتر السعر
+    if price_min is not None:
+        queryset = queryset.filter(price__gte=price_min)
+    if price_max is not None:
+        queryset = queryset.filter(price__lte=price_max)
+
+    # فلتر المخزون
+    if in_stock is True:
+        queryset = queryset.filter(stock_quantity__gt=0)
+
+    # العدد الإجمالي
+    total = queryset.count()
+
+    # التصفح
+    start = (page - 1) * page_size
+    products = queryset.select_related('category', 'vendor')[start:start + page_size]
+
+    # تحويل النتائج
+    hits = []
+    for product in products:
+        hits.append(ProductHitSchema(
+            id=str(product.id),
+            name=product.name,
+            name_en=getattr(product, 'name_en', None),
+            slug=product.slug,
+            sku=product.sku,
+            description=product.description,
+            price=float(product.price),
+            original_price=float(getattr(product, 'original_price', product.price)),
+            discount_percentage=None,
+            has_discount=False,
+            in_stock=product.stock_quantity > 0,
+            stock_status='in_stock' if product.stock_quantity > 0 else 'out_of_stock',
+            rating=float(product.rating) if product.rating else None,
+            reviews_count=getattr(product, 'reviews_count', 0),
+            primary_image=product.images.first().image.url if product.images.exists() and product.images.first().image else None,
+            category={
+                'id': product.category.id,
+                'name': product.category.name,
+                'name_en': getattr(product.category, 'name_en', ''),
+                'slug': product.category.slug
+            } if product.category else None,
+            store={
+                'id': str(product.vendor.id),
+                'name': product.vendor.name,
+                'slug': product.vendor.slug,
+                'logo': product.vendor.logo.url if product.vendor.logo else None,
+                'rating': float(product.vendor.rating) if product.vendor.rating else None,
+                'is_verified': getattr(product.vendor, 'is_verified', False)
+            } if product.vendor else None,
+            is_featured=getattr(product, 'is_featured', False),
+            is_new=getattr(product, 'is_new', False),
+            is_bestseller=getattr(product, 'is_bestseller', False),
+            distance_km=None,
+            highlight={}
+        ))
+
+    total_pages = (total + page_size - 1) // page_size
+
+    return ProductSearchResponseSchema(
+        meta=SearchMetaSchema(
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+            took_ms=0,
+            query=q
+        ),
+        hits=hits,
+        facets=[],
+        suggestions=[]
+    )
+
+
+# ===================================
 # Search Endpoints
 # ===================================
 @router.get(
@@ -321,12 +428,25 @@ def search_products(
         )
 
     except Exception as e:
-        logger.error(f"Product search error: {e}")
-        return 500, SearchErrorSchema(
-            error="Search failed",
-            error_ar="فشل البحث",
-            details={"message": str(e)}
-        )
+        logger.warning(f"Elasticsearch search failed, falling back to database: {e}")
+        # استخدام البحث البديل في قاعدة البيانات
+        try:
+            return db_fallback_search_products(
+                q=q,
+                category_ids=category_ids if category_ids else None,
+                price_min=price_min,
+                price_max=price_max,
+                in_stock=in_stock,
+                page=page,
+                page_size=page_size
+            )
+        except Exception as db_error:
+            logger.error(f"Database fallback search also failed: {db_error}")
+            return 500, SearchErrorSchema(
+                error="Search failed",
+                error_ar="فشل البحث",
+                details={"message": str(db_error)}
+            )
 
 
 @router.get(
