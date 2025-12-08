@@ -136,10 +136,10 @@ class ProductDocument(Document):
     slug = Keyword()
 
     # ===== النصوص الرئيسية (عربي) =====
+    # ملاحظة: boost يُستخدم في وقت البحث وليس في تعريف الحقول (ES 8.x)
     name = Text(
         analyzer='arabic_analyzer',
         search_analyzer='arabic_search_analyzer',
-        boost=3.0,
         fields={
             'keyword': Keyword(normalizer='arabic_normalizer'),
             'autocomplete': Text(
@@ -152,19 +152,16 @@ class ProductDocument(Document):
 
     description = Text(
         analyzer='arabic_analyzer',
-        search_analyzer='arabic_search_analyzer',
-        boost=1.5
+        search_analyzer='arabic_search_analyzer'
     )
 
     short_description = Text(
-        analyzer='arabic_analyzer',
-        boost=2.0
+        analyzer='arabic_analyzer'
     )
 
     # ===== النصوص (إنجليزي) =====
     name_en = Text(
         analyzer='standard',
-        boost=2.0,
         fields={
             'keyword': Keyword(),
             'autocomplete': Text(
@@ -178,8 +175,7 @@ class ProductDocument(Document):
 
     # ===== البحث المجمع =====
     search_text = Text(
-        analyzer='arabic_synonym_analyzer',
-        boost=1.0
+        analyzer='arabic_synonym_analyzer'
     )  # يجمع: الاسم + الوصف + التصنيف + الكلمات المفتاحية
 
     # ===== التصنيفات =====
@@ -485,7 +481,6 @@ class StoreDocument(Document):
     name = Text(
         analyzer='arabic_analyzer',
         search_analyzer='arabic_search_analyzer',
-        boost=3.0,
         fields={
             'keyword': Keyword(normalizer='arabic_normalizer'),
             'autocomplete': Text(
@@ -497,11 +492,10 @@ class StoreDocument(Document):
 
     name_en = Text(
         analyzer='standard',
-        boost=2.0,
         fields={'keyword': Keyword()}
     )
 
-    description = Text(analyzer='arabic_analyzer', boost=1.5)
+    description = Text(analyzer='arabic_analyzer')
     description_en = Text(analyzer='standard')
 
     # ===== المورد =====
@@ -691,7 +685,6 @@ class CategoryDocument(Document):
     id = Integer()
     name = Text(
         analyzer='arabic_analyzer',
-        boost=3.0,
         fields={
             'keyword': Keyword(normalizer='arabic_normalizer'),
             'autocomplete': Text(analyzer='autocomplete_analyzer')
@@ -734,7 +727,6 @@ class VendorDocument(Document):
 
     company_name = Text(
         analyzer='arabic_analyzer',
-        boost=3.0,
         fields={
             'keyword': Keyword(normalizer='arabic_normalizer'),
             'autocomplete': Text(analyzer='autocomplete_analyzer')
