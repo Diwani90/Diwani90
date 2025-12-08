@@ -21,6 +21,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 import urllib.request
 import urllib.error
+import urllib.parse
 from collections import defaultdict
 
 
@@ -221,7 +222,8 @@ class TestScenarios:
         """البحث عن منتجات"""
         terms = ['أسمنت', 'حديد', 'رمل', 'طوب', 'جبس', 'خرسانة', 'بلاط']
         term = random.choice(terms)
-        return self.client.get(f'/api/v1/search/search?q={term}')
+        encoded_term = urllib.parse.quote(term)
+        return self.client.get(f'/api/v1/search/search?q={encoded_term}')
 
     def browse_stores(self) -> RequestResult:
         """تصفح المتاجر"""
