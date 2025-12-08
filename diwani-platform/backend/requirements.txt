@@ -44,6 +44,7 @@ django-permissions-policy
 celery
 django-celery-beat
 django-celery-results
+flower
 
 # File & Media
 Pillow
