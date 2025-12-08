@@ -407,7 +407,7 @@ print_header("10. اختبار API Endpoints")
 client = Client()
 
 endpoints = [
-    ('/api/health/', 200, 'Health check'),
+    ('/health/', 200, 'Health check'),
     ('/api/v1/platform/stats/', 200, 'Platform stats'),
 ]
 
