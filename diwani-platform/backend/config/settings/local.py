@@ -135,11 +135,12 @@ CELERY_TASK_ALWAYS_EAGER = False  # Set to True for synchronous testing
 # Elasticsearch - Optional in Dev
 # ===================================
 ELASTICSEARCH_DSL = {
-    'default': {
-        'hosts': os.environ.get('ELASTICSEARCH_HOSTS', 'http://localhost:9200'),
-    },
+    'hosts': os.environ.get('ELASTICSEARCH_HOSTS', 'http://localhost:9200'),
+    'timeout': 30,
+    'retry_on_timeout': True,
+    'max_retries': 3,
 }
-ELASTICSEARCH_DSL_AUTOSYNC = os.environ.get('ELASTICSEARCH_ENABLED', 'False').lower() == 'true'
+ELASTICSEARCH_DSL_AUTOSYNC = os.environ.get('ELASTICSEARCH_ENABLED', 'True').lower() == 'true'
 
 # ===================================
 # SMS & Notifications - Test Mode
