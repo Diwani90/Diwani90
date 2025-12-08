@@ -244,6 +244,37 @@ def register_vendor(request: HttpRequest, data: VendorRegisterSchema):
     return 400, {'error': result.error, 'code': result.error_code}
 
 
+@router.post('/auth/register/driver', response={200: TokenResponseSchema, 400: ErrorSchema}, tags=['التسجيل'])
+def register_driver(request: HttpRequest, data: DriverRegisterSchema):
+    """تسجيل سائق جديد"""
+    ip_address = get_client_ip(request)
+
+    result = auth_service.register_driver(
+        phone_number=data.phone_number,
+        code=data.otp_code,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        national_id=data.national_id,
+        license_number=data.license_number,
+        license_expiry=data.license_expiry,
+        vehicle_type=data.vehicle_type,
+        vehicle_model=data.vehicle_model,
+        vehicle_plate=data.vehicle_plate,
+        ip_address=ip_address
+    )
+
+    if result.success:
+        return 200, {
+            'access_token': result.tokens.access_token,
+            'refresh_token': result.tokens.refresh_token,
+            'token_type': result.tokens.token_type,
+            'expires_in': result.tokens.expires_in,
+            'user': result.user
+        }
+
+    return 400, {'error': result.error, 'code': result.error_code}
+
+
 @router.post('/auth/register/request-otp', response={200: OTPSentSchema, 400: ErrorSchema}, tags=['التسجيل'])
 def request_registration_otp(request: HttpRequest, data: PhoneLoginRequestSchema):
     """طلب OTP للتسجيل"""

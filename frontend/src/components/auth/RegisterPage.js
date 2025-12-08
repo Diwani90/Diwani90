@@ -10,13 +10,15 @@ import {
   BuildingOfficeIcon,
   EnvelopeIcon,
   MapPinIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  TruckIcon,
+  IdentificationIcon
 } from '@heroicons/react/24/outline';
 
 const RegisterPage = () => {
   // خطوات التسجيل: phone -> otp -> details -> complete
   const [step, setStep] = useState('phone');
-  const [userType, setUserType] = useState('customer'); // customer or vendor
+  const [userType, setUserType] = useState('customer'); // customer, vendor, or driver
 
   // بيانات المستخدم
   const [phone, setPhone] = useState('');
@@ -33,6 +35,13 @@ const RegisterPage = () => {
     commercial_register: '',
     tax_number: '',
     business_type: '',
+    // حقول السائق
+    national_id: '',
+    license_number: '',
+    license_expiry: '',
+    vehicle_type: '',
+    vehicle_model: '',
+    vehicle_plate: '',
   });
 
   const [loading, setLoading] = useState(false);
@@ -170,6 +179,28 @@ const RegisterPage = () => {
       }
     }
 
+    if (userType === 'driver') {
+      if (!formData.national_id.trim()) {
+        newErrors.national_id = 'رقم الهوية مطلوب';
+      } else if (!/^\d{10}$/.test(formData.national_id)) {
+        newErrors.national_id = 'رقم الهوية يجب أن يكون 10 أرقام';
+      }
+      if (!formData.license_number.trim()) {
+        newErrors.license_number = 'رقم رخصة القيادة مطلوب';
+      }
+      if (!formData.license_expiry) {
+        newErrors.license_expiry = 'تاريخ انتهاء الرخصة مطلوب';
+      } else {
+        const expiryDate = new Date(formData.license_expiry);
+        if (expiryDate < new Date()) {
+          newErrors.license_expiry = 'رخصة القيادة منتهية الصلاحية';
+        }
+      }
+      if (!formData.vehicle_type.trim()) {
+        newErrors.vehicle_type = 'نوع المركبة مطلوب';
+      }
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -179,9 +210,14 @@ const RegisterPage = () => {
     setErrors({});
 
     try {
-      const endpoint = userType === 'vendor'
-        ? '/users/auth/register/vendor'
-        : '/users/auth/register/customer';
+      let endpoint;
+      if (userType === 'vendor') {
+        endpoint = '/users/auth/register/vendor';
+      } else if (userType === 'driver') {
+        endpoint = '/users/auth/register/driver';
+      } else {
+        endpoint = '/users/auth/register/customer';
+      }
 
       const registerData = {
         phone_number: phone,
@@ -197,6 +233,15 @@ const RegisterPage = () => {
         registerData.commercial_register = formData.commercial_register || undefined;
         registerData.tax_number = formData.tax_number || undefined;
         registerData.business_type = formData.business_type || undefined;
+      }
+
+      if (userType === 'driver') {
+        registerData.national_id = formData.national_id;
+        registerData.license_number = formData.license_number;
+        registerData.license_expiry = formData.license_expiry;
+        registerData.vehicle_type = formData.vehicle_type;
+        registerData.vehicle_model = formData.vehicle_model || undefined;
+        registerData.vehicle_plate = formData.vehicle_plate || undefined;
       }
 
       const response = await axios.post(endpoint, registerData);
@@ -324,8 +369,8 @@ const RegisterPage = () => {
               {/* نوع الحساب */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">نوع الحساب</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <label className={`relative flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                <div className="grid grid-cols-3 gap-3">
+                  <label className={`relative flex flex-col items-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
                     userType === 'customer' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                   }`}>
                     <input
@@ -336,13 +381,13 @@ const RegisterPage = () => {
                       onChange={(e) => setUserType(e.target.value)}
                       className="sr-only"
                     />
-                    <UserIcon className="h-6 w-6 ml-3 text-blue-600" />
-                    <div>
-                      <div className="font-semibold text-gray-900">عميل</div>
+                    <UserIcon className="h-6 w-6 mb-2 text-blue-600" />
+                    <div className="text-center">
+                      <div className="font-semibold text-gray-900 text-sm">عميل</div>
                       <div className="text-xs text-gray-500">أشتري مواد البناء</div>
                     </div>
                   </label>
-                  <label className={`relative flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                  <label className={`relative flex flex-col items-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
                     userType === 'vendor' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
                   }`}>
                     <input
@@ -353,10 +398,27 @@ const RegisterPage = () => {
                       onChange={(e) => setUserType(e.target.value)}
                       className="sr-only"
                     />
-                    <BuildingOfficeIcon className="h-6 w-6 ml-3 text-purple-600" />
-                    <div>
-                      <div className="font-semibold text-gray-900">مورد</div>
+                    <BuildingOfficeIcon className="h-6 w-6 mb-2 text-purple-600" />
+                    <div className="text-center">
+                      <div className="font-semibold text-gray-900 text-sm">مورد</div>
                       <div className="text-xs text-gray-500">أبيع مواد البناء</div>
+                    </div>
+                  </label>
+                  <label className={`relative flex flex-col items-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                    userType === 'driver' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="userType"
+                      value="driver"
+                      checked={userType === 'driver'}
+                      onChange={(e) => setUserType(e.target.value)}
+                      className="sr-only"
+                    />
+                    <TruckIcon className="h-6 w-6 mb-2 text-green-600" />
+                    <div className="text-center">
+                      <div className="font-semibold text-gray-900 text-sm">سائق</div>
+                      <div className="text-xs text-gray-500">أوصل الطلبات</div>
                     </div>
                   </label>
                 </div>
@@ -539,6 +601,118 @@ const RegisterPage = () => {
                         placeholder="اختياري"
                       />
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* حقول السائق */}
+              {userType === 'driver' && (
+                <div className="space-y-4 p-4 bg-green-50 rounded-xl">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                    <IdentificationIcon className="h-5 w-5 text-green-600" />
+                    معلومات السائق
+                  </h3>
+                  <div>
+                    <label htmlFor="national_id" className="block text-sm font-medium text-gray-700 mb-2">رقم الهوية الوطنية</label>
+                    <input
+                      id="national_id"
+                      name="national_id"
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.national_id}
+                      onChange={handleChange}
+                      className={`input-field ${errors.national_id ? 'border-red-300' : ''}`}
+                      placeholder="10 أرقام"
+                      maxLength={10}
+                    />
+                    {errors.national_id && <p className="mt-1 text-sm text-red-600">{errors.national_id}</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="license_number" className="block text-sm font-medium text-gray-700 mb-2">رقم رخصة القيادة</label>
+                      <input
+                        id="license_number"
+                        name="license_number"
+                        type="text"
+                        value={formData.license_number}
+                        onChange={handleChange}
+                        className={`input-field ${errors.license_number ? 'border-red-300' : ''}`}
+                        placeholder="رقم الرخصة"
+                      />
+                      {errors.license_number && <p className="mt-1 text-sm text-red-600">{errors.license_number}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="license_expiry" className="block text-sm font-medium text-gray-700 mb-2">تاريخ انتهاء الرخصة</label>
+                      <input
+                        id="license_expiry"
+                        name="license_expiry"
+                        type="date"
+                        value={formData.license_expiry}
+                        onChange={handleChange}
+                        className={`input-field ${errors.license_expiry ? 'border-red-300' : ''}`}
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                      {errors.license_expiry && <p className="mt-1 text-sm text-red-600">{errors.license_expiry}</p>}
+                    </div>
+                  </div>
+                  <h4 className="font-medium text-gray-800 mt-4 flex items-center gap-2">
+                    <TruckIcon className="h-5 w-5 text-green-600" />
+                    معلومات المركبة
+                  </h4>
+                  <div>
+                    <label htmlFor="vehicle_type" className="block text-sm font-medium text-gray-700 mb-2">نوع المركبة</label>
+                    <select
+                      id="vehicle_type"
+                      name="vehicle_type"
+                      value={formData.vehicle_type}
+                      onChange={handleChange}
+                      className={`input-field ${errors.vehicle_type ? 'border-red-300' : ''}`}
+                    >
+                      <option value="">اختر نوع المركبة</option>
+                      <option value="motorcycle">دراجة نارية</option>
+                      <option value="car">سيارة صغيرة</option>
+                      <option value="van">فان / سيارة عائلية</option>
+                      <option value="pickup">بيك أب</option>
+                      <option value="truck_small">شاحنة صغيرة</option>
+                      <option value="truck_medium">شاحنة متوسطة</option>
+                      <option value="truck_large">شاحنة كبيرة</option>
+                    </select>
+                    {errors.vehicle_type && <p className="mt-1 text-sm text-red-600">{errors.vehicle_type}</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="vehicle_model" className="block text-sm font-medium text-gray-700 mb-2">
+                        موديل المركبة <span className="text-gray-400">(اختياري)</span>
+                      </label>
+                      <input
+                        id="vehicle_model"
+                        name="vehicle_model"
+                        type="text"
+                        value={formData.vehicle_model}
+                        onChange={handleChange}
+                        className="input-field"
+                        placeholder="مثال: تويوتا هايلكس 2022"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="vehicle_plate" className="block text-sm font-medium text-gray-700 mb-2">
+                        رقم اللوحة <span className="text-gray-400">(اختياري)</span>
+                      </label>
+                      <input
+                        id="vehicle_plate"
+                        name="vehicle_plate"
+                        type="text"
+                        value={formData.vehicle_plate}
+                        onChange={handleChange}
+                        className="input-field"
+                        placeholder="أ ب ج 1234"
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+                    <p className="text-sm text-yellow-800">
+                      <strong>ملاحظة:</strong> سيتم مراجعة طلب التسجيل والتحقق من بياناتك قبل تفعيل حسابك كسائق.
+                    </p>
                   </div>
                 </div>
               )}

@@ -556,6 +556,90 @@ class AuthService:
             session=session
         )
 
+    def register_driver(
+        self,
+        phone_number: str,
+        code: str,
+        first_name: str,
+        last_name: str,
+        national_id: str,
+        license_number: str,
+        license_expiry,
+        vehicle_type: str,
+        vehicle_model: Optional[str] = None,
+        vehicle_plate: Optional[str] = None,
+        ip_address: Optional[str] = None
+    ) -> AuthResult:
+        """تسجيل سائق جديد"""
+
+        # التحقق من OTP
+        success, message = self.otp_service.verify_otp(
+            phone_number=phone_number,
+            code=code,
+            purpose='register'
+        )
+
+        if not success:
+            return AuthResult(success=False, error=message)
+
+        phone_number = self.otp_service._normalize_phone(phone_number)
+
+        # التحقق من عدم وجود المستخدم
+        if User.objects.filter(phone_number=phone_number).exists():
+            return AuthResult(
+                success=False,
+                error='رقم الهاتف مسجل مسبقاً',
+                error_code='phone_exists'
+            )
+
+        # التحقق من عدم تكرار رقم الهوية
+        if User.objects.filter(national_id=national_id).exists():
+            return AuthResult(
+                success=False,
+                error='رقم الهوية مسجل مسبقاً',
+                error_code='national_id_exists'
+            )
+
+        # التحقق من عدم تكرار رقم الرخصة
+        if DriverProfile.objects.filter(license_number=license_number).exists():
+            return AuthResult(
+                success=False,
+                error='رقم الرخصة مسجل مسبقاً',
+                error_code='license_exists'
+            )
+
+        with transaction.atomic():
+            # إنشاء المستخدم
+            user = User.objects.create(
+                phone_number=phone_number,
+                first_name=first_name,
+                last_name=last_name,
+                national_id=national_id,
+                user_type=UserType.DRIVER,
+                status=UserStatus.PENDING,  # يحتاج مراجعة وموافقة
+                phone_verified=True,
+            )
+
+            # إنشاء ملف السائق
+            DriverProfile.objects.create(
+                user=user,
+                license_number=license_number,
+                license_expiry=license_expiry,
+                vehicle_type=vehicle_type,
+                vehicle_model=vehicle_model or '',
+                vehicle_plate=vehicle_plate or '',
+            )
+
+        # إنشاء الجلسة
+        tokens, session = self._create_session(user, None, ip_address)
+
+        return AuthResult(
+            success=True,
+            user=user,
+            tokens=tokens,
+            session=session
+        )
+
     def refresh_tokens(
         self,
         refresh_token: str,
