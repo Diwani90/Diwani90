@@ -61,7 +61,7 @@ from .schemas import (
     ErrorSchema,
 )
 from .services import auth_service, user_service, otp_service
-from .auth import JWTAuth, get_current_user, OptionalJWTAuth
+from .auth import JWTAuth, get_current_user, OptionalJWTAuth, AdminJWTAuth
 
 router = Router()
 
@@ -686,3 +686,488 @@ def get_client_ip(request: HttpRequest) -> str:
     if x_forwarded_for:
         return x_forwarded_for.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR', '')
+
+
+# =============================================
+# إدارة المستخدمين - Admin User Management
+# =============================================
+
+@router.get('/admin/users', auth=AdminJWTAuth(), tags=['إدارة المستخدمين'])
+def list_all_users(
+    request: HttpRequest,
+    page: int = 1,
+    per_page: int = 20,
+    search: Optional[str] = None,
+    user_type: Optional[str] = None,
+    status: Optional[str] = None,
+    sort_by: str = '-created_at',
+):
+    """قائمة جميع المستخدمين (للمدير فقط)"""
+    from django.db.models import Q
+
+    queryset = User.objects.all()
+
+    # البحث
+    if search:
+        queryset = queryset.filter(
+            Q(first_name__icontains=search) |
+            Q(last_name__icontains=search) |
+            Q(phone_number__icontains=search) |
+            Q(email__icontains=search)
+        )
+
+    # فلتر النوع
+    if user_type:
+        queryset = queryset.filter(user_type=user_type)
+
+    # فلتر الحالة
+    if status:
+        queryset = queryset.filter(status=status)
+
+    # الترتيب
+    queryset = queryset.order_by(sort_by)
+
+    # التصفيح
+    total = queryset.count()
+    offset = (page - 1) * per_page
+    users = queryset[offset:offset + per_page]
+
+    return {
+        'items': [
+            {
+                'id': str(u.id),
+                'phone_number': u.phone_number,
+                'full_name': u.full_name,
+                'email': u.email,
+                'user_type': u.user_type,
+                'status': u.status,
+                'is_verified': u.is_verified,
+                'created_at': u.created_at.isoformat(),
+                'last_login_at': u.last_login_at.isoformat() if u.last_login_at else None,
+            }
+            for u in users
+        ],
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': (total + per_page - 1) // per_page,
+    }
+
+
+@router.get('/admin/users/{user_id}', auth=AdminJWTAuth(), tags=['إدارة المستخدمين'])
+def get_user_details(request: HttpRequest, user_id: UUID):
+    """تفاصيل مستخدم (للمدير فقط)"""
+    user = get_object_or_404(User, id=user_id)
+
+    result = {
+        'id': str(user.id),
+        'phone_number': user.phone_number,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'full_name': user.full_name,
+        'email': user.email,
+        'user_type': user.user_type,
+        'status': user.status,
+        'is_verified': user.is_verified,
+        'phone_verified': user.phone_verified,
+        'email_verified': user.email_verified,
+        'national_id': user.national_id,
+        'orders_count': user.orders_count,
+        'total_spent': float(user.total_spent),
+        'loyalty_points': user.loyalty_points,
+        'created_at': user.created_at.isoformat(),
+        'last_login_at': user.last_login_at.isoformat() if user.last_login_at else None,
+    }
+
+    # إضافة معلومات التاجر إن وجدت
+    if user.user_type == 'vendor':
+        vendor_profile = VendorProfile.objects.filter(user=user).first()
+        if vendor_profile:
+            result['vendor_profile'] = {
+                'company_name': vendor_profile.company_name,
+                'commercial_register': vendor_profile.commercial_register,
+                'tax_number': vendor_profile.tax_number,
+                'is_verified': vendor_profile.is_verified,
+            }
+
+    # إضافة معلومات السائق إن وجدت
+    if user.user_type == 'driver':
+        driver_profile = DriverProfile.objects.filter(user=user).first()
+        if driver_profile:
+            result['driver_profile'] = {
+                'license_number': driver_profile.license_number,
+                'vehicle_type': driver_profile.vehicle_type,
+                'vehicle_plate': driver_profile.vehicle_plate,
+                'is_verified': driver_profile.is_verified,
+                'is_available': driver_profile.is_available,
+            }
+
+    return result
+
+
+@router.put('/admin/users/{user_id}/status', auth=AdminJWTAuth(), tags=['إدارة المستخدمين'])
+def update_user_status(
+    request: HttpRequest,
+    user_id: UUID,
+    status: str,
+    reason: Optional[str] = None,
+):
+    """تحديث حالة المستخدم (للمدير فقط)"""
+    user = get_object_or_404(User, id=user_id)
+
+    valid_statuses = ['active', 'pending', 'suspended', 'banned']
+    if status not in valid_statuses:
+        return {'error': f'حالة غير صالحة. الحالات المسموحة: {", ".join(valid_statuses)}'}
+
+    old_status = user.status
+    user.status = status
+    user.save(update_fields=['status'])
+
+    # يمكن إضافة log للتغييرات هنا
+
+    return {
+        'message': 'تم تحديث حالة المستخدم بنجاح',
+        'user_id': str(user.id),
+        'old_status': old_status,
+        'new_status': status,
+    }
+
+
+@router.delete('/admin/users/{user_id}', auth=AdminJWTAuth(), tags=['إدارة المستخدمين'])
+def delete_user(request: HttpRequest, user_id: UUID):
+    """حذف مستخدم (للمدير فقط) - Soft delete"""
+    user = get_object_or_404(User, id=user_id)
+
+    # لا يمكن حذف المدير نفسه
+    if user.id == request.auth.id:
+        return {'error': 'لا يمكنك حذف حسابك الخاص'}
+
+    # Soft delete
+    user.status = UserStatus.BANNED
+    user.is_active = False
+    user.save(update_fields=['status', 'is_active'])
+
+    # إلغاء جميع الجلسات
+    UserSession.objects.filter(user=user, is_active=True).update(is_active=False)
+
+    return {'message': 'تم حذف المستخدم بنجاح', 'user_id': str(user.id)}
+
+
+# =============================================
+# إدارة البائعين/الموردين - Admin Vendor Management
+# =============================================
+
+@router.get('/admin/vendors', auth=AdminJWTAuth(), tags=['إدارة البائعين'])
+def list_all_vendors(
+    request: HttpRequest,
+    page: int = 1,
+    per_page: int = 20,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    is_verified: Optional[bool] = None,
+    sort_by: str = '-created_at',
+):
+    """قائمة جميع البائعين/الموردين (للمدير فقط)"""
+    from django.db.models import Q
+
+    queryset = VendorProfile.objects.select_related('user').all()
+
+    # البحث
+    if search:
+        queryset = queryset.filter(
+            Q(company_name__icontains=search) |
+            Q(user__first_name__icontains=search) |
+            Q(user__last_name__icontains=search) |
+            Q(user__phone_number__icontains=search) |
+            Q(commercial_register__icontains=search)
+        )
+
+    # فلتر الحالة
+    if status:
+        queryset = queryset.filter(user__status=status)
+
+    # فلتر التوثيق
+    if is_verified is not None:
+        queryset = queryset.filter(is_verified=is_verified)
+
+    # الترتيب
+    if sort_by.startswith('-'):
+        field = sort_by[1:]
+        queryset = queryset.order_by(f'-user__{field}' if field == 'created_at' else sort_by)
+    else:
+        queryset = queryset.order_by(f'user__{sort_by}' if sort_by == 'created_at' else sort_by)
+
+    # التصفيح
+    total = queryset.count()
+    offset = (page - 1) * per_page
+    vendors = queryset[offset:offset + per_page]
+
+    return {
+        'items': [
+            {
+                'id': str(v.id),
+                'user_id': str(v.user.id),
+                'company_name': v.company_name,
+                'owner_name': v.user.full_name,
+                'phone_number': v.user.phone_number,
+                'email': v.user.email,
+                'commercial_register': v.commercial_register,
+                'tax_number': v.tax_number,
+                'status': v.user.status,
+                'is_verified': v.is_verified,
+                'created_at': v.user.created_at.isoformat(),
+            }
+            for v in vendors
+        ],
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': (total + per_page - 1) // per_page,
+    }
+
+
+@router.get('/admin/vendors/{vendor_id}', auth=AdminJWTAuth(), tags=['إدارة البائعين'])
+def get_vendor_details(request: HttpRequest, vendor_id: UUID):
+    """تفاصيل بائع/مورد (للمدير فقط)"""
+    vendor = get_object_or_404(VendorProfile.objects.select_related('user'), id=vendor_id)
+
+    return {
+        'id': str(vendor.id),
+        'user_id': str(vendor.user.id),
+        'company_name': vendor.company_name,
+        'company_name_en': vendor.company_name_en,
+        'commercial_register': vendor.commercial_register,
+        'tax_number': vendor.tax_number,
+        'business_type': vendor.business_type,
+        'is_verified': vendor.is_verified,
+        'verified_at': vendor.verified_at.isoformat() if vendor.verified_at else None,
+        'user': {
+            'full_name': vendor.user.full_name,
+            'phone_number': vendor.user.phone_number,
+            'email': vendor.user.email,
+            'status': vendor.user.status,
+            'created_at': vendor.user.created_at.isoformat(),
+        }
+    }
+
+
+@router.post('/admin/vendors/{vendor_id}/verify', auth=AdminJWTAuth(), tags=['إدارة البائعين'])
+def verify_vendor(
+    request: HttpRequest,
+    vendor_id: UUID,
+    is_verified: bool = True,
+    notes: Optional[str] = None,
+):
+    """توثيق/رفض بائع (للمدير فقط)"""
+    from django.utils import timezone
+
+    vendor = get_object_or_404(VendorProfile, id=vendor_id)
+
+    vendor.is_verified = is_verified
+    if is_verified:
+        vendor.verified_at = timezone.now()
+        vendor.user.status = 'active'
+        vendor.user.is_verified = True
+        vendor.user.save(update_fields=['status', 'is_verified'])
+    else:
+        vendor.verified_at = None
+        vendor.user.status = 'pending'
+        vendor.user.save(update_fields=['status'])
+
+    vendor.save(update_fields=['is_verified', 'verified_at'])
+
+    action = 'توثيق' if is_verified else 'رفض توثيق'
+    return {
+        'message': f'تم {action} البائع بنجاح',
+        'vendor_id': str(vendor.id),
+        'is_verified': vendor.is_verified,
+    }
+
+
+@router.put('/admin/vendors/{vendor_id}/status', auth=AdminJWTAuth(), tags=['إدارة البائعين'])
+def update_vendor_status(
+    request: HttpRequest,
+    vendor_id: UUID,
+    status: str,
+    reason: Optional[str] = None,
+):
+    """تحديث حالة البائع (للمدير فقط)"""
+    vendor = get_object_or_404(VendorProfile, id=vendor_id)
+
+    valid_statuses = ['active', 'pending', 'suspended', 'banned']
+    if status not in valid_statuses:
+        return {'error': f'حالة غير صالحة. الحالات المسموحة: {", ".join(valid_statuses)}'}
+
+    old_status = vendor.user.status
+    vendor.user.status = status
+    vendor.user.save(update_fields=['status'])
+
+    return {
+        'message': 'تم تحديث حالة البائع بنجاح',
+        'vendor_id': str(vendor.id),
+        'old_status': old_status,
+        'new_status': status,
+    }
+
+
+# =============================================
+# إدارة السائقين - Admin Driver Management
+# =============================================
+
+@router.get('/admin/drivers', auth=AdminJWTAuth(), tags=['إدارة السائقين'])
+def list_all_drivers(
+    request: HttpRequest,
+    page: int = 1,
+    per_page: int = 20,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    is_verified: Optional[bool] = None,
+    is_available: Optional[bool] = None,
+    sort_by: str = '-created_at',
+):
+    """قائمة جميع السائقين (للمدير فقط)"""
+    from django.db.models import Q
+
+    queryset = DriverProfile.objects.select_related('user').all()
+
+    # البحث
+    if search:
+        queryset = queryset.filter(
+            Q(user__first_name__icontains=search) |
+            Q(user__last_name__icontains=search) |
+            Q(user__phone_number__icontains=search) |
+            Q(license_number__icontains=search) |
+            Q(vehicle_plate__icontains=search)
+        )
+
+    # فلتر الحالة
+    if status:
+        queryset = queryset.filter(user__status=status)
+
+    # فلتر التوثيق
+    if is_verified is not None:
+        queryset = queryset.filter(is_verified=is_verified)
+
+    # فلتر التوفر
+    if is_available is not None:
+        queryset = queryset.filter(is_available=is_available)
+
+    # الترتيب
+    if sort_by.startswith('-'):
+        field = sort_by[1:]
+        queryset = queryset.order_by(f'-user__{field}' if field == 'created_at' else sort_by)
+    else:
+        queryset = queryset.order_by(f'user__{sort_by}' if sort_by == 'created_at' else sort_by)
+
+    # التصفيح
+    total = queryset.count()
+    offset = (page - 1) * per_page
+    drivers = queryset[offset:offset + per_page]
+
+    return {
+        'items': [
+            {
+                'id': str(d.id),
+                'user_id': str(d.user.id),
+                'full_name': d.user.full_name,
+                'phone_number': d.user.phone_number,
+                'license_number': d.license_number,
+                'vehicle_type': d.vehicle_type,
+                'vehicle_plate': d.vehicle_plate,
+                'status': d.user.status,
+                'is_verified': d.is_verified,
+                'is_available': d.is_available,
+                'is_online': d.is_online,
+                'created_at': d.user.created_at.isoformat(),
+            }
+            for d in drivers
+        ],
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': (total + per_page - 1) // per_page,
+    }
+
+
+@router.post('/admin/drivers/{driver_id}/verify', auth=AdminJWTAuth(), tags=['إدارة السائقين'])
+def verify_driver(
+    request: HttpRequest,
+    driver_id: UUID,
+    is_verified: bool = True,
+    notes: Optional[str] = None,
+):
+    """توثيق/رفض سائق (للمدير فقط)"""
+    from django.utils import timezone
+
+    driver = get_object_or_404(DriverProfile, id=driver_id)
+
+    driver.is_verified = is_verified
+    if is_verified:
+        driver.verified_at = timezone.now()
+        driver.user.status = 'active'
+        driver.user.is_verified = True
+        driver.user.save(update_fields=['status', 'is_verified'])
+    else:
+        driver.verified_at = None
+        driver.user.status = 'pending'
+        driver.user.save(update_fields=['status'])
+
+    driver.save(update_fields=['is_verified', 'verified_at'])
+
+    action = 'توثيق' if is_verified else 'رفض توثيق'
+    return {
+        'message': f'تم {action} السائق بنجاح',
+        'driver_id': str(driver.id),
+        'is_verified': driver.is_verified,
+    }
+
+
+# =============================================
+# إحصائيات الإدارة - Admin Statistics
+# =============================================
+
+@router.get('/admin/stats', auth=AdminJWTAuth(), tags=['إحصائيات الإدارة'])
+def get_admin_stats(request: HttpRequest):
+    """إحصائيات شاملة للإدارة"""
+    from django.db.models import Count, Sum, Avg, Q
+    from django.utils import timezone
+    from datetime import timedelta
+
+    today = timezone.now()
+    last_30_days = today - timedelta(days=30)
+    last_7_days = today - timedelta(days=7)
+
+    # إحصائيات المستخدمين
+    users_stats = User.objects.aggregate(
+        total=Count('id'),
+        active=Count('id', filter=Q(status='active')),
+        pending=Count('id', filter=Q(status='pending')),
+        suspended=Count('id', filter=Q(status='suspended')),
+        customers=Count('id', filter=Q(user_type='customer')),
+        vendors=Count('id', filter=Q(user_type='vendor')),
+        drivers=Count('id', filter=Q(user_type='driver')),
+        new_last_30_days=Count('id', filter=Q(created_at__gte=last_30_days)),
+        new_last_7_days=Count('id', filter=Q(created_at__gte=last_7_days)),
+    )
+
+    # إحصائيات البائعين
+    vendors_stats = VendorProfile.objects.aggregate(
+        total=Count('id'),
+        verified=Count('id', filter=Q(is_verified=True)),
+        pending=Count('id', filter=Q(is_verified=False)),
+    )
+
+    # إحصائيات السائقين
+    drivers_stats = DriverProfile.objects.aggregate(
+        total=Count('id'),
+        verified=Count('id', filter=Q(is_verified=True)),
+        available=Count('id', filter=Q(is_available=True)),
+        online=Count('id', filter=Q(is_online=True)),
+    )
+
+    return {
+        'users': users_stats,
+        'vendors': vendors_stats,
+        'drivers': drivers_stats,
+        'updated_at': today.isoformat(),
+    }

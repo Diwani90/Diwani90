@@ -12,6 +12,9 @@ import CustomerDashboard from './components/customer/CustomerDashboard';
 import SupplierDashboard from './components/supplier/SupplierDashboard';
 import DriverDashboard from './components/driver/DriverDashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
+import AdminUsersPage from './components/admin/AdminUsersPage';
+import AdminVendorsPage from './components/admin/AdminVendorsPage';
+import AdminOrdersPage from './components/admin/AdminOrdersPage';
 import ProductCatalog from './components/product/ProductCatalog';
 import ProductDetail from './components/product/ProductDetail';
 import CartPage from './components/cart/CartPage';
@@ -255,17 +258,17 @@ function App() {
                   } />
                   <Route path="/admin/users" element={
                     <ProtectedRoute allowedRoles={['admin']}>
-                      <AdminDashboard />
+                      <AdminUsersPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/admin/vendors" element={
                     <ProtectedRoute allowedRoles={['admin']}>
-                      <AdminDashboard />
+                      <AdminVendorsPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/admin/orders" element={
                     <ProtectedRoute allowedRoles={['admin']}>
-                      <AdminDashboard />
+                      <AdminOrdersPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/admin/finance" element={
