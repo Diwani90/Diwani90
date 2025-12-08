@@ -140,6 +140,7 @@ class AuditLog(models.Model):
     transaction_ref = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
+        app_label = 'core'
         db_table = 'audit_log'
         ordering = ['-timestamp']
         indexes = [

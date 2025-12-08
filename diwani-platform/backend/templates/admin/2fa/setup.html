@@ -38,17 +38,28 @@
     {% if qr_url %}
     <div style="text-align: center; margin: 30px 0;">
         <h3>1. امسح رمز QR بتطبيق المصادقة:</h3>
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={{ qr_url|urlencode }}"
-             alt="QR Code"
-             style="border: 1px solid #ddd; padding: 10px; background: white;">
+        <div id="qrcode" style="display: inline-block; padding: 10px; background: white; border: 1px solid #ddd;"></div>
 
         <p style="margin-top: 15px; color: #666;">
             أو أدخل هذا المفتاح يدوياً:
         </p>
-        <code style="background: #f8f9fa; padding: 10px; display: block; margin: 10px 0; font-size: 14px;">
+        <code style="background: #f8f9fa; padding: 10px; display: block; margin: 10px 0; font-size: 14px; word-break: break-all;">
             {{ secret_key }}
         </code>
     </div>
+
+    <!-- QR Code Generation - Local (no external dependencies) -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script>
+        new QRCode(document.getElementById("qrcode"), {
+            text: "{{ qr_url }}",
+            width: 200,
+            height: 200,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.L
+        });
+    </script>
 
     <form method="post" action="{% url 'admin:verify_2fa' %}" style="margin-top: 30px;">
         {% csrf_token %}
