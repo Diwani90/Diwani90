@@ -1,0 +1,13 @@
+# ===================================
+# منصة ديواني - Elasticsearch with Arabic Support
+# Elasticsearch with phonetic analysis plugin
+# ===================================
+
+FROM docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+
+# تثبيت plugins المطلوبة للبحث العربي المتقدم
+RUN bin/elasticsearch-plugin install --batch analysis-phonetic && \
+    bin/elasticsearch-plugin install --batch analysis-icu
+
+# التحقق من تثبيت الـ plugins
+RUN bin/elasticsearch-plugin list

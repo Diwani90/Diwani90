@@ -164,7 +164,9 @@ services:
   # Elasticsearch (Advanced Search)
   # =============================
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.elasticsearch
     container_name: diwani_elasticsearch
     restart: unless-stopped
     environment:

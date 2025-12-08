@@ -157,9 +157,13 @@ ARABIC_INDEX_SETTINGS = {
                     # أدوات
                     "أدوات, عدة, tools",
                 ]
+            },
+            # Phonetic للأخطاء الإملائية
+            "arabic_phonetic": {
+                "type": "phonetic",
+                "encoder": "double_metaphone",
+                "replace": False
             }
-            # ملاحظة: تم إزالة arabic_phonetic لأنه يتطلب plugin غير مثبت
-            # يمكن إضافته لاحقاً بتثبيت analysis-phonetic plugin
         },
 
         # ===================================
